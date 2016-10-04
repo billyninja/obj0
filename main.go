@@ -49,8 +49,14 @@ func main() {
 	defer renderer.Destroy()
 
 	var running bool = true
+	var tick1 uint32 = sdl.GetTicks()
+	var tick2 uint32
+
 	for running {
 		running = catchEvents()
-		sdl.Delay(2)
+		tick2 = sdl.GetTicks()
+		dt = (tick2 - tick1) * 0.001
+		tick1 = tick2
+		sdl.Delay(1)
 	}
 }
