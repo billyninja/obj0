@@ -53,11 +53,23 @@ type CharGFX struct {
 	PoseTick uint32
 }
 
+type StillObj struct {
+	Position  Vector2d
+	Source    *sdl.Rect
+	Collision uint8
+}
+
 var PC = CharGFX{
 	Position: Vector2d{0, 0},
 	Action:   MAN_WALK_FRONT,
 	Pose:     0,
 	PoseTick: 16,
+}
+
+var Tree = CharGFX{
+	Position:  Vector2d{128, 64},
+	Source:    TREE,
+	Collision: 1,
 }
 
 func handleKeyEvent(key sdl.Keycode) {
