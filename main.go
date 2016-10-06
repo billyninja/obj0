@@ -35,10 +35,12 @@ type Camera struct {
 }
 
 type AnimatedObj struct {
-	Position Vector2d
-	Action   [8]*sdl.Rect
-	Pose     uint8
-	PoseTick uint32
+	Position  Vector2d
+	Action    [8]*sdl.Rect
+	Txt       *sdl.Texture
+	Pose      uint8
+	PoseTick  uint32
+	Collision uint8
 }
 
 type StillObj struct {
@@ -53,6 +55,7 @@ var (
 	event    sdl.Event
 	GRASS    *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
 	TREE     *sdl.Rect = &sdl.Rect{0, 32, tileSize, tileSize}
+	DIRT     *sdl.Rect = &sdl.Rect{703, 0, tileSize, tileSize}
 	WALL     *sdl.Rect = &sdl.Rect{0, 64, tileSize, tileSize}
 	DOOR     *sdl.Rect = &sdl.Rect{256, 32, tileSize, tileSize}
 	WOMAN    *sdl.Rect = &sdl.Rect{0, 128, tileSize, tileSize}
@@ -82,6 +85,12 @@ var (
 	EXPLOSION_S4 *sdl.Rect = &sdl.Rect{128, 96, tileSize, tileSize}
 
 	EXPLOSION_A [8]*sdl.Rect = [8]*sdl.Rect{EXPLOSION_S1, EXPLOSION_S2, EXPLOSION_S3, EXPLOSION_S4}
+
+	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, tileSize, tileSize}
+	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, tileSize, tileSize}
+	LAVA_S3 *sdl.Rect = &sdl.Rect{256, 0, tileSize, tileSize}
+
+	LAVA_A [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
 )
 
 var (
@@ -100,8 +109,8 @@ var (
 	World   [WORLD_CELLS_X][WORLD_CELLS_Y]*sdl.Rect
 	CullMap []*StillObj
 
-	Obstacles  []*StillObj
-	Explosions []*AnimatedObj
+	Obstacles   []*StillObj
+	Interactive []*AnimatedObj
 )
 
 func checkCol(p1 Vector2d, p2 Vector2d) bool {
@@ -138,7 +147,7 @@ func handleKeyEvent(key sdl.Keycode) {
 		}
 
 		for _, obj := range CullMap {
-			if checkCol(np, obj.Position) {
+			if obj.Collision == 1 && checkCol(np, obj.Position) {
 				return
 			}
 		}
@@ -266,19 +275,19 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 		}
 	}
 
-	for _, exp := range Explosions {
-		scrPoint := worldToScreen(exp.Position, Cam)
+	for _, obj := range Interactive {
+		scrPoint := worldToScreen(obj.Position, Cam)
 		if inScreen(scrPoint) {
 
 			pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
-			src := exp.Action[exp.Pose]
-			renderer.Copy(ss, src, &pos)
+			src := obj.Action[obj.Pose]
+			renderer.Copy(obj.Txt, src, &pos)
 
 			CullMap = append(CullMap, &StillObj{
-				Position:  exp.Position,
+				Position:  obj.Position,
 				Source:    src,
-				Collision: 1,
-				Anim:      exp,
+				Collision: obj.Collision,
+				Anim:      obj,
 			})
 		}
 	}
@@ -287,6 +296,24 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 	scrPoint := worldToScreen(PC.Position, Cam)
 	pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
 	renderer.Copy(ss, PC.Action[PC.Pose], &pos)
+
+	// HEALTH BAR BG
+	renderer.SetDrawColor(255, 0, 0, 255)
+	renderer.FillRect(&sdl.Rect{20, 20, 100, 10})
+
+	// HEALTH BAR FG
+	renderer.SetDrawColor(0, 255, 0, 255)
+	renderer.FillRect(&sdl.Rect{20, 20, 75, 10})
+
+	// MANA BAR BG
+	renderer.SetDrawColor(60, 60, 60, 255)
+	renderer.FillRect(&sdl.Rect{20, 40, 100, 10})
+
+	// MANA BAR BG
+	renderer.SetDrawColor(0, 0, 255, 255)
+	renderer.FillRect(&sdl.Rect{20, 40, 30, 10})
+
+	//println(len(CullMap), len(Interactive), len(Obstacles))
 
 	renderer.Present()
 }
@@ -329,26 +356,30 @@ func main() {
 
 	buildDummyWorld(WORLD_CELLS_X, WORLD_CELLS_Y)
 
-	for i := 0; i < 2020; i++ {
+	rand.Seed(int64(500 * WORLD_CELLS_X * WORLD_CELLS_Y))
+	for i := 0; i < 500; i++ {
 		cX := rand.Int31n(WORLD_CELLS_X)
 		cY := rand.Int31n(WORLD_CELLS_Y)
-		World[cX][cY] = WALL
+		World[cX][cY] = TREE
 		Obstacles = append(Obstacles, &StillObj{
 			Position:  Vector2d{cX * tileSize, cY * tileSize},
-			Source:    WALL,
+			Source:    TREE,
 			Collision: 1,
 		})
 	}
 
-	for i := 0; i < 800; i++ {
+	rand.Seed(int64(300 * WORLD_CELLS_X * WORLD_CELLS_Y))
+	for i := 0; i < 5000; i++ {
 		cX := rand.Int31n(WORLD_CELLS_X)
 		cY := rand.Int31n(WORLD_CELLS_Y)
 
-		Explosions = append(Explosions, &AnimatedObj{
-			Position: Vector2d{cX * tileSize, cY * tileSize},
-			Action:   EXPLOSION_A,
-			Pose:     0,
-			PoseTick: 16,
+		Interactive = append(Interactive, &AnimatedObj{
+			Position:  Vector2d{cX * tileSize, cY * tileSize},
+			Txt:       tilesetTxt,
+			Action:    LAVA_A,
+			Pose:      0,
+			PoseTick:  16,
+			Collision: 0,
 		})
 	}
 
@@ -358,23 +389,27 @@ func main() {
 		updateScene()
 		renderScene(renderer, tilesetTxt, spritesheetTxt)
 		println((time.Since(then)) / time.Microsecond)
-		//sdl.Delay(33)
+		sdl.Delay(24)
 	}
 }
 
 func buildDummyWorld(cellsX int, cellsY int) {
+
+	rand.Seed(int64(cellsX * cellsY))
+
 	for i := 0; i < cellsX; i++ {
+		rand.Seed(int64(cellsX * i))
 		for j := 0; j < cellsY; j++ {
 
 			seed := int64(i * j)
-			if seed%2 == 3 {
+			if seed%2 == 1 {
 				rand.Seed(seed)
 			}
 
 			tile := GRASS
 			r := rand.Int31n(100)
 			if r < 10 {
-				tile = TREE
+				tile = DIRT
 			}
 
 			if r == 10 {
