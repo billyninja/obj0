@@ -23,7 +23,9 @@ type Vector2d struct {
 }
 
 type Camera struct {
-	P Vector2d
+	P   Vector2d
+	DZx int32
+	DZy int32
 }
 
 type AnimatedObj struct {
@@ -76,7 +78,9 @@ var (
 
 var (
 	Cam = Camera{
-		P: Vector2d{300, 300},
+		P:   Vector2d{300, 300},
+		DZx: 30,
+		DZy: 60,
 	}
 	PC = AnimatedObj{
 		Position: Vector2d{Cam.P.X + 120, Cam.P.Y + 90},
@@ -104,19 +108,15 @@ func handleKeyEvent(key sdl.Keycode) {
 	case 1073741906:
 		PC.Action = MAN_WALK_BACK
 		np.Y -= 1
-		Cam.P.Y -= 1
 	case 1073741905:
 		PC.Action = MAN_WALK_FRONT
 		np.Y += 1
-		Cam.P.Y += 1
 	case 1073741904:
 		PC.Action = MAN_WALK_LEFT
 		np.X -= 1
-		Cam.P.X -= 1
 	case 1073741903:
 		PC.Action = MAN_WALK_RIGHT
 		np.X += 1
-		Cam.P.X += 1
 	}
 
 	if np.X == PC.Position.X && np.Y == PC.Position.Y {
@@ -132,6 +132,24 @@ func handleKeyEvent(key sdl.Keycode) {
 				return
 			}
 		}
+
+		newScreenPos := worldToScreen(np, Cam)
+		if (Cam.DZx - newScreenPos.X) > 0 {
+			Cam.P.X -= (Cam.DZx - newScreenPos.X)
+		}
+
+		if (winWidth - Cam.DZx) < (newScreenPos.X + tileSize) {
+			Cam.P.X += (newScreenPos.X + tileSize) - (winWidth - Cam.DZx)
+		}
+
+		if (Cam.DZy - newScreenPos.Y) > 0 {
+			Cam.P.Y -= (Cam.DZy - newScreenPos.Y)
+		}
+
+		if (winHeight - Cam.DZy) < (newScreenPos.Y + tileSize) {
+			Cam.P.Y += (newScreenPos.Y + tileSize) - (winHeight - Cam.DZy)
+		}
+
 		PC.Position = np
 
 		PC.PoseTick -= 1
