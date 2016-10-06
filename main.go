@@ -200,7 +200,6 @@ func ActProc() {
 			return
 		}
 	}
-
 }
 
 func handleKeyEvent(key sdl.Keycode) {
@@ -263,7 +262,6 @@ func handleKeyEvent(key sdl.Keycode) {
 		PC.Solid.Anim.Pose = get_next_pose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
 		PC.Solid.Anim.PoseTick = 16
 	}
-
 }
 
 func catchEvents() bool {
@@ -298,7 +296,7 @@ func updateScene() {
 				}
 			}
 		}
-		PC.Speed = 1
+		//PC.Speed = 1
 		EventTick = 16
 	}
 
