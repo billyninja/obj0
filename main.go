@@ -367,7 +367,7 @@ func buildDummyWorld(cellsX int, cellsY int) {
 		for j := 0; j < cellsY; j++ {
 
 			seed := int64(i * j)
-			if seed%2 > 0 {
+			if seed%2 == 3 {
 				rand.Seed(seed)
 			}
 
