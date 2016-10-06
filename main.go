@@ -185,14 +185,29 @@ func checkCol(p1 Vector2d, p2 Vector2d) bool {
 		p1.Y+tileSize > p2.Y)
 }
 
+func ActProc() {
+	action_hit_box = ActHitBox(PC.Solid.Position, Facing())
+	GUI = append(GUI, aHB) // Debug hint
+
+	for _, obj := range CullMap {
+
+		if obj.Handlers != nil && obj.Handlers.OnActEvent != nil &&
+			checkCol(Vector2d{aHB.X, aHB.Y}, obj.Position) {
+
+			obj.Handlers.OnActEvent(1)
+			return
+		}
+	}
+
+}
+
 func handleKeyEvent(key sdl.Keycode) {
 	np := Vector2d{PC.Solid.Position.X, PC.Solid.Position.Y}
-	var aHB *sdl.Rect = nil
 
 	switch key {
 	case KEY_SPACE_BAR:
-		aHB = ActHitBox(PC.Solid.Position, Facing())
-		GUI = append(GUI, aHB)
+		ActProc()
+		return
 	case KEY_LEFT_SHIT:
 		PC.Speed = 3
 		np.Y -= PC.Speed
