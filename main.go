@@ -12,15 +12,17 @@ import (
 
 const (
 	winWidth, winHeight int32 = 640, 480
-	tileSize            int32 = 32
-	cY                  int32 = winHeight / tileSize
-	cX                  int32 = winWidth / tileSize
+	tileSize                  = 32
+	cY                        = winHeight / tileSize
+	cX                        = winWidth / tileSize
 	WORLD_CELLS_X             = 500
 	WORLD_CELLS_Y             = 200
 	KEY_ARROW_UP              = 1073741906
 	KEY_ARROW_DOWN            = 1073741905
 	KEY_ARROW_LEFT            = 1073741904
 	KEY_ARROW_RIGHT           = 1073741903
+	KEY_LEFT_SHIT             = 1073742049
+	KEY_SPACE_BAR             = 32
 )
 
 type Vector2d struct {
@@ -34,18 +36,36 @@ type Camera struct {
 	DZy int32
 }
 
-type AnimatedObj struct {
+type Event func(uint16)
+
+type InteractionHandlers struct {
+	OnCollDmg   uint16
+	OnCollPush  *Vector2d
+	OnCollEvent Event
+	OnActDmg    uint16
+	OnActPush   *Vector2d
+	OnActEvent  Event
+}
+
+type Solid struct {
 	Position  Vector2d
-	Action    [8]*sdl.Rect
+	Source    *sdl.Rect
+	Anim      *Animation
+	Handlers  *InteractionHandlers
 	Txt       *sdl.Texture
-	Pose      uint8
-	PoseTick  uint32
 	Collision uint8
 }
 
-type Char struct {
-	Anim *AnimatedObj
+type Animation struct {
+	Action   [8]*sdl.Rect
+	Pose     uint8
+	PoseTick uint32
+}
 
+type Char struct {
+	Solid *Solid
+
+	Speed     int32
 	CurrentHP uint16
 	MaxHP     uint16
 
@@ -53,11 +73,28 @@ type Char struct {
 	MaxST     uint16
 }
 
-type StillObj struct {
-	Position  Vector2d
-	Source    *sdl.Rect
-	Collision uint8
-	Anim      *AnimatedObj
+func Facing() Vector2d {
+	off := Vector2d{0, 0}
+	switch PC.Solid.Anim.Action {
+	case MAN_WALK_BACK:
+		off = Vector2d{0, -1}
+	case MAN_WALK_FRONT:
+		off = Vector2d{0, 1}
+	case MAN_WALK_LEFT:
+		off = Vector2d{-1, 0}
+	case MAN_WALK_RIGHT:
+		off = Vector2d{1, 0}
+	}
+	return off
+}
+
+func ActHitBox(source, facing Vector2d) *sdl.Rect {
+	return &sdl.Rect{
+		source.X + (facing.X * tileSize),
+		source.Y + (facing.Y * tileSize),
+		tileSize,
+		tileSize,
+	}
 }
 
 var (
@@ -101,6 +138,16 @@ var (
 	LAVA_S3 *sdl.Rect = &sdl.Rect{256, 0, tileSize, tileSize}
 
 	LAVA_A [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
+
+	LAVA_ANIMATION = &Animation{
+		Action:   LAVA_A,
+		Pose:     0,
+		PoseTick: 16,
+	}
+
+	LAVA_HANDLERS = &InteractionHandlers{
+		OnCollDmg: 3,
+	}
 )
 
 var (
@@ -110,24 +157,25 @@ var (
 		DZy: 60,
 	}
 	PC = Char{
-		Anim: &AnimatedObj{
+		Solid: &Solid{
 			Position: Vector2d{Cam.P.X + 120, Cam.P.Y + 90},
-			Action:   MAN_WALK_FRONT,
-			Pose:     0,
-			PoseTick: 16,
+			Anim: &Animation{
+				Action:   MAN_WALK_FRONT,
+				Pose:     0,
+				PoseTick: 16,
+			},
 		},
-
+		Speed:     1,
 		CurrentHP: 220,
 		MaxHP:     250,
 		CurrentST: 65,
 		MaxST:     100,
 	}
 
-	World   [WORLD_CELLS_X][WORLD_CELLS_Y]*sdl.Rect
-	CullMap []*StillObj
-
-	Obstacles   []*StillObj
-	Interactive []*AnimatedObj
+	World       [WORLD_CELLS_X][WORLD_CELLS_Y]*sdl.Rect
+	Interactive []*Solid
+	GUI         []*sdl.Rect
+	CullMap     []*Solid
 )
 
 func checkCol(p1 Vector2d, p2 Vector2d) bool {
@@ -138,62 +186,87 @@ func checkCol(p1 Vector2d, p2 Vector2d) bool {
 }
 
 func handleKeyEvent(key sdl.Keycode) {
-	np := Vector2d{PC.Anim.Position.X, PC.Anim.Position.Y}
+	np := Vector2d{PC.Solid.Position.X, PC.Solid.Position.Y}
+	var aHB *sdl.Rect = nil
 
 	switch key {
+	case KEY_SPACE_BAR:
+		aHB = ActHitBox(PC.Solid.Position, Facing())
+		GUI = append(GUI, aHB)
+	case KEY_LEFT_SHIT:
+		PC.Speed = 3
+		np.Y -= PC.Speed
 	case KEY_ARROW_UP:
-		PC.Anim.Action = MAN_WALK_BACK
-		np.Y -= 1
+		PC.Solid.Anim.Action = MAN_WALK_BACK
+		np.Y -= PC.Speed
 	case KEY_ARROW_DOWN:
-		PC.Anim.Action = MAN_WALK_FRONT
-		np.Y += 1
+		PC.Solid.Anim.Action = MAN_WALK_FRONT
+		np.Y += PC.Speed
 	case KEY_ARROW_LEFT:
-		PC.Anim.Action = MAN_WALK_LEFT
-		np.X -= 1
+		PC.Solid.Anim.Action = MAN_WALK_LEFT
+		np.X -= PC.Speed
 	case KEY_ARROW_RIGHT:
-		PC.Anim.Action = MAN_WALK_RIGHT
-		np.X += 1
+		PC.Solid.Anim.Action = MAN_WALK_RIGHT
+		np.X += PC.Speed
 	}
 
-	if np.X == PC.Anim.Position.X && np.Y == PC.Anim.Position.Y {
-		PC.Anim.Pose = 0
-	} else {
+	if np.X == PC.Solid.Position.X && np.Y == PC.Solid.Position.Y {
+		PC.Solid.Anim.Pose = 0
+	}
 
-		if np.X <= 0 || np.Y <= 0 {
-			return
-		}
+	var (
+		moved    bool = ((np.X-PC.Solid.Position.X != 0) || (np.Y-PC.Solid.Position.Y != 0))
+		outbound      = (np.X <= 0 || np.Y <= 0)
+	)
+
+	if outbound || (!moved && aHB == nil) {
+		return
+	}
+
+	if aHB != nil || moved {
 
 		for _, obj := range CullMap {
-			if obj.Collision == 1 && checkCol(np, obj.Position) {
+
+			if aHB != nil &&
+				obj.Handlers != nil &&
+				obj.Handlers.OnActEvent != nil &&
+				checkCol(Vector2d{aHB.X, aHB.Y}, obj.Position) {
+
+				obj.Handlers.OnActEvent(1)
+				return
+			}
+
+			if checkCol(np, obj.Position) && obj.Collision == 1 {
 				return
 			}
 		}
-
-		newScreenPos := worldToScreen(np, Cam)
-		if (Cam.DZx - newScreenPos.X) > 0 {
-			Cam.P.X -= (Cam.DZx - newScreenPos.X)
-		}
-
-		if (winWidth - Cam.DZx) < (newScreenPos.X + tileSize) {
-			Cam.P.X += (newScreenPos.X + tileSize) - (winWidth - Cam.DZx)
-		}
-
-		if (Cam.DZy - newScreenPos.Y) > 0 {
-			Cam.P.Y -= (Cam.DZy - newScreenPos.Y)
-		}
-
-		if (winHeight - Cam.DZy) < (newScreenPos.Y + tileSize) {
-			Cam.P.Y += (newScreenPos.Y + tileSize) - (winHeight - Cam.DZy)
-		}
-
-		PC.Anim.Position = np
-
-		PC.Anim.PoseTick -= 1
-		if PC.Anim.PoseTick == 0 {
-			PC.Anim.Pose = get_next_pose(PC.Anim.Action, PC.Anim.Pose)
-			PC.Anim.PoseTick = 16
-		}
 	}
+
+	newScreenPos := worldToScreen(np, Cam)
+	if (Cam.DZx - newScreenPos.X) > 0 {
+		Cam.P.X -= (Cam.DZx - newScreenPos.X)
+	}
+
+	if (winWidth - Cam.DZx) < (newScreenPos.X + tileSize) {
+		Cam.P.X += (newScreenPos.X + tileSize) - (winWidth - Cam.DZx)
+	}
+
+	if (Cam.DZy - newScreenPos.Y) > 0 {
+		Cam.P.Y -= (Cam.DZy - newScreenPos.Y)
+	}
+
+	if (winHeight - Cam.DZy) < (newScreenPos.Y + tileSize) {
+		Cam.P.Y += (newScreenPos.Y + tileSize) - (winHeight - Cam.DZy)
+	}
+
+	PC.Solid.Position = np
+
+	PC.Solid.Anim.PoseTick -= 1
+	if PC.Solid.Anim.PoseTick == 0 {
+		PC.Solid.Anim.Pose = get_next_pose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
+		PC.Solid.Anim.PoseTick = 16
+	}
+
 }
 
 func catchEvents() bool {
@@ -216,9 +289,23 @@ func get_next_pose(action [8]*sdl.Rect, currPose uint8) uint8 {
 	}
 }
 
-func updateScene() {
+var EventTick uint8 = 16
 
-	// update explosions poses
+func updateScene() {
+	EventTick -= 1
+	if EventTick == 0 {
+		for _, obj := range CullMap {
+			if checkCol(PC.Solid.Position, obj.Position) {
+				if obj.Handlers != nil && obj.Handlers.OnCollDmg != 0 {
+					depletHP(obj.Handlers.OnCollDmg)
+				}
+			}
+		}
+		PC.Speed = 1
+		EventTick = 16
+	}
+
+	// update Interactives poses
 	for _, cObj := range CullMap {
 		if cObj.Anim == nil {
 			continue
@@ -244,8 +331,8 @@ func worldToScreen(pos Vector2d, cam Camera) Vector2d {
 }
 
 func inScreen(p Vector2d) bool {
-	return (p.X > 0 && p.X < winWidth &&
-		p.Y > 0 && p.Y < winHeight)
+	return (p.X > (tileSize*-1) && p.X < winWidth &&
+		p.Y > (tileSize*-1) && p.Y < winHeight)
 }
 
 func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
@@ -287,36 +374,35 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 		}
 	}
 
-	CullMap = []*StillObj{}
-
-	for _, obs := range Obstacles {
-		scrPoint := worldToScreen(obs.Position, Cam)
-		if inScreen(scrPoint) {
-			CullMap = append(CullMap, obs)
-		}
-	}
+	CullMap = []*Solid{}
 
 	for _, obj := range Interactive {
 		scrPoint := worldToScreen(obj.Position, Cam)
 		if inScreen(scrPoint) {
 
 			pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
-			src := obj.Action[obj.Pose]
+			var src *sdl.Rect
+			if obj.Anim != nil {
+				src = obj.Anim.Action[obj.Anim.Pose]
+			} else {
+				src = obj.Source
+			}
 			renderer.Copy(obj.Txt, src, &pos)
 
-			CullMap = append(CullMap, &StillObj{
+			CullMap = append(CullMap, &Solid{
 				Position:  obj.Position,
 				Source:    src,
 				Collision: obj.Collision,
-				Anim:      obj,
+				Anim:      obj.Anim,
+				Handlers:  obj.Handlers,
 			})
 		}
 	}
 
 	// Rendering the PC
-	scrPoint := worldToScreen(PC.Anim.Position, Cam)
+	scrPoint := worldToScreen(PC.Solid.Position, Cam)
 	pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
-	renderer.Copy(ss, PC.Anim.Action[PC.Anim.Pose], &pos)
+	renderer.Copy(ss, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], &pos)
 
 	// HEALTH BAR BG
 	renderer.SetDrawColor(255, 0, 0, 255)
@@ -335,9 +421,35 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 	x := int32(calcPerc(PC.CurrentST, PC.MaxST))
 	renderer.FillRect(&sdl.Rect{20, 40, x, 12})
 
-	//println(len(CullMap), len(Interactive), len(Obstacles))
+	for _, el := range GUI {
+		scrPoint := worldToScreen(Vector2d{el.X, el.Y}, Cam)
+		rect := &sdl.Rect{scrPoint.X, scrPoint.Y, el.W, el.H}
+		renderer.SetDrawColor(255, 0, 0, 255)
+		renderer.DrawRect(rect)
+	}
 
+	// FLUSH FRAME
 	renderer.Present()
+
+}
+
+func depletHP(dmg uint16) {
+	hp := PC.CurrentHP
+	if hp <= 0 {
+		return
+	}
+	if hp-dmg < 0 {
+		hp = 0
+	} else {
+		hp -= dmg
+	}
+
+	PC.CurrentHP = hp
+}
+
+func BashDoor(a uint16) {
+	PC.Solid.Position.X = 200
+	PC.Solid.Position.Y = 100
 }
 
 func main() {
@@ -378,31 +490,41 @@ func main() {
 
 	buildDummyWorld(WORLD_CELLS_X, WORLD_CELLS_Y)
 
-	rand.Seed(int64(500 * WORLD_CELLS_X * WORLD_CELLS_Y))
-	for i := 0; i < 500; i++ {
-		cX := rand.Int31n(WORLD_CELLS_X)
-		cY := rand.Int31n(WORLD_CELLS_Y)
-		World[cX][cY] = TREE
-		Obstacles = append(Obstacles, &StillObj{
-			Position:  Vector2d{cX * tileSize, cY * tileSize},
-			Source:    TREE,
-			Collision: 1,
-		})
-	}
-
 	rand.Seed(int64(300 * WORLD_CELLS_X * WORLD_CELLS_Y))
 	for i := 0; i < 5000; i++ {
+
 		cX := rand.Int31n(WORLD_CELLS_X)
 		cY := rand.Int31n(WORLD_CELLS_Y)
+		obj_type := rand.Int31n(10)
+		pos := Vector2d{cX * tileSize, cY * tileSize}
+		sol := &Solid{}
 
-		Interactive = append(Interactive, &AnimatedObj{
-			Position:  Vector2d{cX * tileSize, cY * tileSize},
-			Txt:       tilesetTxt,
-			Action:    LAVA_A,
-			Pose:      0,
-			PoseTick:  16,
-			Collision: 0,
-		})
+		switch obj_type {
+		case 1:
+			sol = &Solid{
+				Position:  pos,
+				Txt:       tilesetTxt,
+				Anim:      LAVA_ANIMATION,
+				Handlers:  LAVA_HANDLERS,
+				Collision: 0,
+			}
+			break
+		case 2:
+			sol = &Solid{
+				Position:  pos,
+				Txt:       tilesetTxt,
+				Source:    DOOR,
+				Anim:      nil,
+				Collision: 1,
+				Handlers: &InteractionHandlers{
+					OnActEvent: BashDoor,
+				},
+			}
+			break
+		}
+
+		Interactive = append(Interactive, sol)
+
 	}
 
 	for running {
@@ -432,10 +554,6 @@ func buildDummyWorld(cellsX int, cellsY int) {
 			r := rand.Int31n(100)
 			if r < 10 {
 				tile = DIRT
-			}
-
-			if r == 10 {
-				tile = DOOR
 			}
 
 			World[i][j] = tile
