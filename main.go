@@ -50,6 +50,7 @@ var (
 	GRASS    *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
 	TREE     *sdl.Rect = &sdl.Rect{0, 32, tileSize, tileSize}
 	WALL     *sdl.Rect = &sdl.Rect{0, 64, tileSize, tileSize}
+	DOOR     *sdl.Rect = &sdl.Rect{32, 288, tileSize, tileSize}
 	WOMAN    *sdl.Rect = &sdl.Rect{0, 128, tileSize, tileSize}
 
 	// MAIN CHAR POSES AND ANIMATIONS
