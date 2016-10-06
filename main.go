@@ -206,7 +206,7 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 	var offsetX, offsetY int32 = tileSize, tileSize
 
 	renderer.Clear()
-	renderer.SetDrawColor(0, 0, 255, 255)
+	renderer.SetDrawColor(0, 0, 0, 255)
 
 	// Rendering the terrain
 	for winY := init; winY < winHeight; winY += offsetY {
@@ -217,6 +217,10 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 
 			worldCellX := uint16((Cam.P.X + winX) / tileSize)
 			worldCellY := uint16((Cam.P.Y + winY) / tileSize)
+
+			if worldCellX <= 0 || worldCellY <= 0 {
+				continue
+			}
 
 			gfx := World[worldCellX][worldCellY]
 
