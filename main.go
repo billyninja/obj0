@@ -17,6 +17,10 @@ const (
 	cX                  int32 = winWidth / tileSize
 	WORLD_CELLS_X             = 500
 	WORLD_CELLS_Y             = 200
+	KEY_ARROW_UP              = 1073741906
+	KEY_ARROW_DOWN            = 1073741905
+	KEY_ARROW_LEFT            = 1073741904
+	KEY_ARROW_RIGHT           = 1073741903
 )
 
 type Vector2d struct {
@@ -111,16 +115,16 @@ func handleKeyEvent(key sdl.Keycode) {
 	np := Vector2d{PC.Position.X, PC.Position.Y}
 
 	switch key {
-	case 1073741906:
+	case KEY_ARROW_UP:
 		PC.Action = MAN_WALK_BACK
 		np.Y -= 1
-	case 1073741905:
+	case KEY_ARROW_DOWN:
 		PC.Action = MAN_WALK_FRONT
 		np.Y += 1
-	case 1073741904:
+	case KEY_ARROW_LEFT:
 		PC.Action = MAN_WALK_LEFT
 		np.X -= 1
-	case 1073741903:
+	case KEY_ARROW_RIGHT:
 		PC.Action = MAN_WALK_RIGHT
 		np.X += 1
 	}
