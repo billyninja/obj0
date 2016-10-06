@@ -50,7 +50,7 @@ var (
 	GRASS    *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
 	TREE     *sdl.Rect = &sdl.Rect{0, 32, tileSize, tileSize}
 	WALL     *sdl.Rect = &sdl.Rect{0, 64, tileSize, tileSize}
-	DOOR     *sdl.Rect = &sdl.Rect{32, 288, tileSize, tileSize}
+	DOOR     *sdl.Rect = &sdl.Rect{256, 32, tileSize, tileSize}
 	WOMAN    *sdl.Rect = &sdl.Rect{0, 128, tileSize, tileSize}
 
 	// MAIN CHAR POSES AND ANIMATIONS
@@ -361,10 +361,20 @@ func main() {
 func buildDummyWorld(cellsX int, cellsY int) {
 	for i := 0; i < cellsX; i++ {
 		for j := 0; j < cellsY; j++ {
-			tile := GRASS
 
-			if rand.Int31n(10) < 1 {
+			seed := int64(i * j)
+			if seed%2 > 0 {
+				rand.Seed(seed)
+			}
+
+			tile := GRASS
+			r := rand.Int31n(100)
+			if r < 10 {
 				tile = TREE
+			}
+
+			if r == 10 {
+				tile = DOOR
 			}
 
 			World[i][j] = tile
