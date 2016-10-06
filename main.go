@@ -43,6 +43,16 @@ type AnimatedObj struct {
 	Collision uint8
 }
 
+type Char struct {
+	Anim *AnimatedObj
+
+	CurrentHP uint16
+	MaxHP     uint16
+
+	CurrentST uint16
+	MaxST     uint16
+}
+
 type StillObj struct {
 	Position  Vector2d
 	Source    *sdl.Rect
@@ -99,11 +109,18 @@ var (
 		DZx: 30,
 		DZy: 60,
 	}
-	PC = AnimatedObj{
-		Position: Vector2d{Cam.P.X + 120, Cam.P.Y + 90},
-		Action:   MAN_WALK_FRONT,
-		Pose:     0,
-		PoseTick: 16,
+	PC = Character{
+		Anim: AnimatedObj{
+			Position: Vector2d{Cam.P.X + 120, Cam.P.Y + 90},
+			Action:   MAN_WALK_FRONT,
+			Pose:     0,
+			PoseTick: 16,
+		},
+
+		CurrentHP: 500,
+		MaxHP:     500,
+		CurrentST: 100,
+		MaxST:     100,
 	}
 
 	World   [WORLD_CELLS_X][WORLD_CELLS_Y]*sdl.Rect
@@ -215,6 +232,10 @@ func updateScene() {
 	}
 }
 
+func calcPerc(v1, v2) float {
+	return (v1 / v2) * 100
+}
+
 func worldToScreen(pos Vector2d, cam Camera) Vector2d {
 	return Vector2d{
 		X: pos.X - cam.P.X,
@@ -299,19 +320,19 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 
 	// HEALTH BAR BG
 	renderer.SetDrawColor(255, 0, 0, 255)
-	renderer.FillRect(&sdl.Rect{20, 20, 100, 10})
+	renderer.FillRect(&sdl.Rect{20, 20, 100, 12})
 
 	// HEALTH BAR FG
 	renderer.SetDrawColor(0, 255, 0, 255)
-	renderer.FillRect(&sdl.Rect{20, 20, 75, 10})
+	renderer.FillRect(&sdl.Rect{20, 20, int32(calcPerc(PC.CurrentHP, PC.MaxHP)), 12})
 
 	// MANA BAR BG
 	renderer.SetDrawColor(60, 60, 60, 255)
-	renderer.FillRect(&sdl.Rect{20, 40, 100, 10})
+	renderer.FillRect(&sdl.Rect{20, 40, 100, 12})
 
-	// MANA BAR BG
+	// MANA BAR FG
 	renderer.SetDrawColor(0, 0, 255, 255)
-	renderer.FillRect(&sdl.Rect{20, 40, 30, 10})
+	renderer.FillRect(&sdl.Rect{20, 20, int32(calcPerc(PC.CurrentST, PC.MaxST)), 12})
 
 	//println(len(CullMap), len(Interactive), len(Obstacles))
 
