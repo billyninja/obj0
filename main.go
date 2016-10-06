@@ -5,6 +5,8 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/sdl_image"
 	"math/rand"
+	"runtime"
+	"time"
 	//"os"
 )
 
@@ -39,6 +41,7 @@ type StillObj struct {
 	Position  Vector2d
 	Source    *sdl.Rect
 	Collision uint8
+	Anim      *AnimatedObj
 }
 
 var (
@@ -89,7 +92,9 @@ var (
 		PoseTick: 16,
 	}
 
-	World      [WORLD_CELLS_X][WORLD_CELLS_Y]*sdl.Rect
+	World   [WORLD_CELLS_X][WORLD_CELLS_Y]*sdl.Rect
+	CullMap []*StillObj
+
 	Obstacles  []*StillObj
 	Explosions []*AnimatedObj
 )
@@ -127,13 +132,8 @@ func handleKeyEvent(key sdl.Keycode) {
 			return
 		}
 
-		for _, obt := range Obstacles {
-			if checkCol(np, obt.Position) {
-				return
-			}
-		}
-		for _, exp := range Explosions {
-			if checkCol(np, exp.Position) {
+		for _, obj := range CullMap {
+			if checkCol(np, obj.Position) {
 				return
 			}
 		}
@@ -188,11 +188,15 @@ func get_next_pose(action [8]*sdl.Rect, currPose uint8) uint8 {
 func updateScene() {
 
 	// update explosions poses
-	for _, exps := range Explosions {
-		exps.PoseTick -= 1
-		if exps.PoseTick == 0 {
-			exps.Pose = get_next_pose(exps.Action, exps.Pose)
-			exps.PoseTick = 16
+	for _, cObj := range CullMap {
+		if cObj.Anim == nil {
+			continue
+		}
+		animObj := cObj.Anim
+		animObj.PoseTick -= 1
+		if animObj.PoseTick == 0 {
+			animObj.Pose = get_next_pose(animObj.Action, animObj.Pose)
+			animObj.PoseTick = 16
 		}
 	}
 }
@@ -202,6 +206,11 @@ func worldToScreen(pos Vector2d, cam Camera) Vector2d {
 		X: pos.X - cam.P.X,
 		Y: pos.Y - cam.P.Y,
 	}
+}
+
+func inScreen(p Vector2d) bool {
+	return (p.X > 0 && p.X < winWidth &&
+		p.Y > 0 && p.Y < winHeight)
 }
 
 func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
@@ -223,7 +232,10 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 			worldCellX := uint16((Cam.P.X + winX) / tileSize)
 			worldCellY := uint16((Cam.P.Y + winY) / tileSize)
 
-			if worldCellX <= 0 || worldCellX > WORLD_CELLS_X || worldCellY <= 0 || worldCellY > WORLD_CELLS_Y {
+			if worldCellX <= 0 ||
+				worldCellX > WORLD_CELLS_X ||
+				worldCellY <= 0 ||
+				worldCellY > WORLD_CELLS_Y {
 				continue
 			}
 
@@ -240,10 +252,30 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 		}
 	}
 
+	CullMap = []*StillObj{}
+
+	for _, obs := range Obstacles {
+		scrPoint := worldToScreen(obs.Position, Cam)
+		if inScreen(scrPoint) {
+			CullMap = append(CullMap, obs)
+		}
+	}
+
 	for _, exp := range Explosions {
 		scrPoint := worldToScreen(exp.Position, Cam)
-		pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
-		renderer.Copy(ss, exp.Action[exp.Pose], &pos)
+		if inScreen(scrPoint) {
+
+			pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
+			src := exp.Action[exp.Pose]
+			renderer.Copy(ss, src, &pos)
+
+			CullMap = append(CullMap, &StillObj{
+				Position:  exp.Position,
+				Source:    src,
+				Collision: 1,
+				Anim:      exp,
+			})
+		}
 	}
 
 	// Rendering the PC
@@ -255,6 +287,9 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 }
 
 func main() {
+
+	runtime.GOMAXPROCS(1)
+
 	var window *sdl.Window
 	var renderer *sdl.Renderer
 
@@ -284,8 +319,6 @@ func main() {
 	defer particlesTxt.Destroy()
 
 	var running bool = true
-	var tick1 uint32 = sdl.GetTicks()
-	var tick2 uint32
 
 	renderer.SetDrawColor(0, 0, 255, 255)
 
@@ -316,19 +349,17 @@ func main() {
 
 	for running {
 		running = catchEvents()
-		tick2 = sdl.GetTicks()
-		dt := uint32(tick2 - tick1)
-		println(dt)
+		then := time.Now()
 		updateScene()
 		renderScene(renderer, tilesetTxt, spritesheetTxt)
-		tick1 = tick2
+		println((time.Since(then)) / time.Microsecond)
 		//sdl.Delay(33)
 	}
 }
 
-func buildDummyWorld(cellsX int32, cellsY int32) {
-	for i := 0; i < WORLD_CELLS_X; i++ {
-		for j := 0; j < WORLD_CELLS_Y; j++ {
+func buildDummyWorld(cellsX int, cellsY int) {
+	for i := 0; i < cellsX; i++ {
+		for j := 0; j < cellsY; j++ {
 			tile := GRASS
 
 			if rand.Int31n(10) < 1 {
