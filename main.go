@@ -122,6 +122,11 @@ func handleKeyEvent(key sdl.Keycode) {
 	if np.X == PC.Position.X && np.Y == PC.Position.Y {
 		PC.Pose = 0
 	} else {
+
+		if np.X <= 0 || np.Y <= 0 {
+			return
+		}
+
 		for _, obt := range Obstacles {
 			if checkCol(np, obt.Position) {
 				return
@@ -222,6 +227,8 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 				continue
 			}
 
+			println(worldCellX, worldCellY)
+
 			gfx := World[worldCellX][worldCellY]
 
 			if offsetX != int32(tileSize) || offsetY != int32(tileSize) {
@@ -235,17 +242,16 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 		}
 	}
 
-	// Rendering the PC
-	scrPoint := worldToScreen(PC.Position, Cam)
-	pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
-	renderer.Copy(ss, PC.Action[PC.Pose], &pos)
-
 	for _, exp := range Explosions {
 		scrPoint := worldToScreen(exp.Position, Cam)
 		pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
 		renderer.Copy(ss, exp.Action[exp.Pose], &pos)
-
 	}
+
+	// Rendering the PC
+	scrPoint := worldToScreen(PC.Position, Cam)
+	pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
+	renderer.Copy(ss, PC.Action[PC.Pose], &pos)
 
 	renderer.Present()
 }
@@ -285,7 +291,7 @@ func main() {
 
 	renderer.SetDrawColor(0, 0, 255, 255)
 
-	buildDummyWorld()
+	buildDummyWorld(WORLD_CELLS_X, WORLD_CELLS_Y)
 
 	for i := 0; i < 2020; i++ {
 		cX := rand.Int31n(WORLD_CELLS_X)
@@ -318,11 +324,11 @@ func main() {
 		updateScene()
 		renderScene(renderer, tilesetTxt, spritesheetTxt)
 		tick1 = tick2
-		sdl.Delay(33)
+		//sdl.Delay(33)
 	}
 }
 
-func buildDummyWorld() {
+func buildDummyWorld(cellsX int32, cellsY int32) {
 	for i := 0; i < WORLD_CELLS_X; i++ {
 		for j := 0; j < WORLD_CELLS_Y; j++ {
 			tile := GRASS
