@@ -223,11 +223,9 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 			worldCellX := uint16((Cam.P.X + winX) / tileSize)
 			worldCellY := uint16((Cam.P.Y + winY) / tileSize)
 
-			if worldCellX <= 0 || worldCellY <= 0 {
+			if worldCellX <= 0 || worldCellX > WORLD_CELLS_X || worldCellY <= 0 || worldCellY > WORLD_CELLS_Y {
 				continue
 			}
-
-			println(worldCellX, worldCellY)
 
 			gfx := World[worldCellX][worldCellY]
 
