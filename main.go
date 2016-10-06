@@ -186,14 +186,16 @@ func checkCol(p1 Vector2d, p2 Vector2d) bool {
 }
 
 func ActProc() {
-	action_hit_box = ActHitBox(PC.Solid.Position, Facing())
-	GUI = append(GUI, aHB) // Debug hint
+	action_hit_box := ActHitBox(PC.Solid.Position, Facing())
+	action_origin := Vector2d{action_hit_box.X, action_hit_box.Y}
+
+	// Debug hint
+	GUI = append(GUI, action_hit_box)
 
 	for _, obj := range CullMap {
-
-		if obj.Handlers != nil && obj.Handlers.OnActEvent != nil &&
-			checkCol(Vector2d{aHB.X, aHB.Y}, obj.Position) {
-
+		if obj.Handlers != nil &&
+			obj.Handlers.OnActEvent != nil &&
+			checkCol(action_origin, obj.Position) {
 			obj.Handlers.OnActEvent(1)
 			return
 		}
@@ -225,35 +227,15 @@ func handleKeyEvent(key sdl.Keycode) {
 		np.X += PC.Speed
 	}
 
-	if np.X == PC.Solid.Position.X && np.Y == PC.Solid.Position.Y {
+	var outbound bool = (np.X <= 0 || np.Y <= 0)
+	if np.X == PC.Solid.Position.X && np.Y == PC.Solid.Position.Y || outbound {
 		PC.Solid.Anim.Pose = 0
-	}
-
-	var (
-		moved    bool = ((np.X-PC.Solid.Position.X != 0) || (np.Y-PC.Solid.Position.Y != 0))
-		outbound      = (np.X <= 0 || np.Y <= 0)
-	)
-
-	if outbound || (!moved && aHB == nil) {
 		return
 	}
 
-	if aHB != nil || moved {
-
-		for _, obj := range CullMap {
-
-			if aHB != nil &&
-				obj.Handlers != nil &&
-				obj.Handlers.OnActEvent != nil &&
-				checkCol(Vector2d{aHB.X, aHB.Y}, obj.Position) {
-
-				obj.Handlers.OnActEvent(1)
-				return
-			}
-
-			if checkCol(np, obj.Position) && obj.Collision == 1 {
-				return
-			}
+	for _, obj := range CullMap {
+		if checkCol(np, obj.Position) && obj.Collision == 1 {
+			return
 		}
 	}
 
