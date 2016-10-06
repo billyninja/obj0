@@ -109,17 +109,17 @@ var (
 		DZx: 30,
 		DZy: 60,
 	}
-	PC = Character{
-		Anim: AnimatedObj{
+	PC = Char{
+		Anim: &AnimatedObj{
 			Position: Vector2d{Cam.P.X + 120, Cam.P.Y + 90},
 			Action:   MAN_WALK_FRONT,
 			Pose:     0,
 			PoseTick: 16,
 		},
 
-		CurrentHP: 500,
-		MaxHP:     500,
-		CurrentST: 100,
+		CurrentHP: 220,
+		MaxHP:     250,
+		CurrentST: 65,
 		MaxST:     100,
 	}
 
@@ -138,25 +138,25 @@ func checkCol(p1 Vector2d, p2 Vector2d) bool {
 }
 
 func handleKeyEvent(key sdl.Keycode) {
-	np := Vector2d{PC.Position.X, PC.Position.Y}
+	np := Vector2d{PC.Anim.Position.X, PC.Anim.Position.Y}
 
 	switch key {
 	case KEY_ARROW_UP:
-		PC.Action = MAN_WALK_BACK
+		PC.Anim.Action = MAN_WALK_BACK
 		np.Y -= 1
 	case KEY_ARROW_DOWN:
-		PC.Action = MAN_WALK_FRONT
+		PC.Anim.Action = MAN_WALK_FRONT
 		np.Y += 1
 	case KEY_ARROW_LEFT:
-		PC.Action = MAN_WALK_LEFT
+		PC.Anim.Action = MAN_WALK_LEFT
 		np.X -= 1
 	case KEY_ARROW_RIGHT:
-		PC.Action = MAN_WALK_RIGHT
+		PC.Anim.Action = MAN_WALK_RIGHT
 		np.X += 1
 	}
 
-	if np.X == PC.Position.X && np.Y == PC.Position.Y {
-		PC.Pose = 0
+	if np.X == PC.Anim.Position.X && np.Y == PC.Anim.Position.Y {
+		PC.Anim.Pose = 0
 	} else {
 
 		if np.X <= 0 || np.Y <= 0 {
@@ -186,12 +186,12 @@ func handleKeyEvent(key sdl.Keycode) {
 			Cam.P.Y += (newScreenPos.Y + tileSize) - (winHeight - Cam.DZy)
 		}
 
-		PC.Position = np
+		PC.Anim.Position = np
 
-		PC.PoseTick -= 1
-		if PC.PoseTick == 0 {
-			PC.Pose = get_next_pose(PC.Action, PC.Pose)
-			PC.PoseTick = 16
+		PC.Anim.PoseTick -= 1
+		if PC.Anim.PoseTick == 0 {
+			PC.Anim.Pose = get_next_pose(PC.Anim.Action, PC.Anim.Pose)
+			PC.Anim.PoseTick = 16
 		}
 	}
 }
@@ -232,8 +232,8 @@ func updateScene() {
 	}
 }
 
-func calcPerc(v1, v2) float {
-	return (v1 / v2) * 100
+func calcPerc(v1 uint16, v2 uint16) float32 {
+	return (float32(v1) / float32(v2) * 100)
 }
 
 func worldToScreen(pos Vector2d, cam Camera) Vector2d {
@@ -314,9 +314,9 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 	}
 
 	// Rendering the PC
-	scrPoint := worldToScreen(PC.Position, Cam)
+	scrPoint := worldToScreen(PC.Anim.Position, Cam)
 	pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
-	renderer.Copy(ss, PC.Action[PC.Pose], &pos)
+	renderer.Copy(ss, PC.Anim.Action[PC.Anim.Pose], &pos)
 
 	// HEALTH BAR BG
 	renderer.SetDrawColor(255, 0, 0, 255)
@@ -332,7 +332,8 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 
 	// MANA BAR FG
 	renderer.SetDrawColor(0, 0, 255, 255)
-	renderer.FillRect(&sdl.Rect{20, 20, int32(calcPerc(PC.CurrentST, PC.MaxST)), 12})
+	x := int32(calcPerc(PC.CurrentST, PC.MaxST))
+	renderer.FillRect(&sdl.Rect{20, 40, x, 12})
 
 	//println(len(CullMap), len(Interactive), len(Obstacles))
 
