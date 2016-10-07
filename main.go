@@ -30,6 +30,17 @@ type Vector2d struct {
 	Y int32
 }
 
+type Scene struct {
+	codename   string
+	TileSet    *sdl.Texture
+	CellsX     int32
+	CellsY     int32
+	StartPoint Vector2d
+	CamPoint   Vector2d
+	tileA      *sdl.Rect
+	tileB      *sdl.Rect
+}
+
 type Camera struct {
 	P   Vector2d
 	DZx int32
@@ -148,6 +159,27 @@ var (
 	LAVA_HANDLERS = &InteractionHandlers{
 		OnCollDmg: 3,
 	}
+
+	SCENES []*Scene = []*Scene{
+		&Scene{
+			codename:   "plains",
+			CellsX:     50,
+			CellsY:     30,
+			CamPoint:   Vector2d{120, 120},
+			StartPoint: Vector2d{300, 200},
+			tileA:      GRASS,
+			tileB:      DIRT,
+		},
+		&Scene{
+			codename:   "cave",
+			CellsX:     15,
+			CellsY:     20,
+			CamPoint:   Vector2d{120, 120},
+			StartPoint: Vector2d{50, 50},
+			tileA:      DIRT,
+			tileB:      LAVA_S1,
+		},
+	}
 )
 
 var (
@@ -172,7 +204,7 @@ var (
 		MaxST:     100,
 	}
 
-	World       [WORLD_CELLS_X][WORLD_CELLS_Y]*sdl.Rect
+	World       [][]*sdl.Rect
 	Interactive []*Solid
 	GUI         []*sdl.Rect
 	CullMap     []*Solid
@@ -185,7 +217,7 @@ func checkCol(p1 Vector2d, p2 Vector2d) bool {
 		p1.Y+tileSize > p2.Y)
 }
 
-func ActProc() {
+func actProc() {
 	action_hit_box := ActHitBox(PC.Solid.Position, Facing())
 	action_origin := Vector2d{action_hit_box.X, action_hit_box.Y}
 
@@ -207,7 +239,7 @@ func handleKeyEvent(key sdl.Keycode) {
 
 	switch key {
 	case KEY_SPACE_BAR:
-		ActProc()
+		actProc()
 		return
 	case KEY_LEFT_SHIT:
 		PC.Speed = 3
@@ -226,7 +258,10 @@ func handleKeyEvent(key sdl.Keycode) {
 		np.X += PC.Speed
 	}
 
-	var outbound bool = (np.X <= 0 || np.Y <= 0)
+	// TODO CLEAN THIS UP
+	var outbound bool = (np.X <= 0 || np.Y <= 0 ||
+		np.X > int32(len(World)*tileSize) || np.Y > int32(len(World[0])*tileSize))
+
 	if np.X == PC.Solid.Position.X && np.Y == PC.Solid.Position.Y || outbound {
 		PC.Solid.Anim.Pose = 0
 		return
@@ -259,7 +294,7 @@ func handleKeyEvent(key sdl.Keycode) {
 
 	PC.Solid.Anim.PoseTick -= 1
 	if PC.Solid.Anim.PoseTick == 0 {
-		PC.Solid.Anim.Pose = get_next_pose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
+		PC.Solid.Anim.Pose = getNextPose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
 		PC.Solid.Anim.PoseTick = 16
 	}
 }
@@ -276,7 +311,7 @@ func catchEvents() bool {
 	return true
 }
 
-func get_next_pose(action [8]*sdl.Rect, currPose uint8) uint8 {
+func getNextPose(action [8]*sdl.Rect, currPose uint8) uint8 {
 	if action[currPose+1] == nil {
 		return 0
 	} else {
@@ -284,9 +319,78 @@ func get_next_pose(action [8]*sdl.Rect, currPose uint8) uint8 {
 	}
 }
 
+func (s *Scene) build() {
+	ni := int(s.CellsX) + 1
+	nj := int(s.CellsY) + 1
+
+	println("start build: ", s.codename)
+
+	World = make([][]*sdl.Rect, ni)
+	println("Allocation rows", ni)
+
+	for i := 0; i < ni; i++ {
+		World[i] = make([]*sdl.Rect, nj)
+		println("Allocation columns for", i, nj)
+
+		for j := 0; j < nj; j++ {
+			println("c", i, j)
+			tile := s.tileA
+			if rand.Int31n(100) < 10 {
+				tile = s.tileB
+			}
+
+			World[i][j] = tile
+		}
+	}
+
+	println("==finish build: ", s.codename)
+}
+
+func (s *Scene) populate(population int) {
+
+	//Interactive = []*Solid{}
+	//Interactive = make([]*Solid, population)
+
+	for i := 0; i < population; i++ {
+
+		cX := rand.Int31n(s.CellsX)
+		cY := rand.Int31n(s.CellsY)
+
+		absolute_pos := Vector2d{cX * tileSize, cY * tileSize}
+		obj_type := rand.Int31n(10)
+		sol := &Solid{}
+
+		switch obj_type {
+		case 1:
+			sol = &Solid{
+				Position:  absolute_pos,
+				Txt:       s.TileSet,
+				Anim:      LAVA_ANIMATION,
+				Handlers:  LAVA_HANDLERS,
+				Collision: 0,
+			}
+			break
+		case 2:
+			sol = &Solid{
+				Position:  absolute_pos,
+				Txt:       s.TileSet,
+				Source:    DOOR,
+				Anim:      nil,
+				Collision: 1,
+				Handlers: &InteractionHandlers{
+					OnActEvent: BashDoor,
+				},
+			}
+			break
+		}
+
+		Interactive = append(Interactive, sol)
+	}
+}
+
 var EventTick uint8 = 16
 
-func updateScene() {
+func (s *Scene) update() {
 	EventTick -= 1
 	if EventTick == 0 {
 		for _, obj := range CullMap {
@@ -308,36 +412,27 @@ func updateScene() {
 		animObj := cObj.Anim
 		animObj.PoseTick -= 1
 		if animObj.PoseTick == 0 {
-			animObj.Pose = get_next_pose(animObj.Action, animObj.Pose)
+			animObj.Pose = getNextPose(animObj.Action, animObj.Pose)
 			animObj.PoseTick = 16
 		}
 	}
 }
 
-func calcPerc(v1 uint16, v2 uint16) float32 {
-	return (float32(v1) / float32(v2) * 100)
-}
-
-func worldToScreen(pos Vector2d, cam Camera) Vector2d {
-	return Vector2d{
-		X: pos.X - cam.P.X,
-		Y: pos.Y - cam.P.Y,
-	}
-}
-
-func inScreen(p Vector2d) bool {
-	return (p.X > (tileSize*-1) && p.X < winWidth &&
-		p.Y > (tileSize*-1) && p.Y < winHeight)
-}
-
-func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
+func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	var init int32 = 0
 	var Source *sdl.Rect
 
 	var offsetX, offsetY int32 = tileSize, tileSize
 
+	if Cam.P.X < 0 {
+		Cam.P.X = 0
+	}
+
+	if Cam.P.Y < 0 {
+		Cam.P.Y = 0
+	}
+
 	renderer.Clear()
-	renderer.SetDrawColor(0, 0, 0, 255)
 
 	// Rendering the terrain
 	for winY := init; winY < winHeight; winY += offsetY {
@@ -348,11 +443,9 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 
 			worldCellX := uint16((Cam.P.X + winX) / tileSize)
 			worldCellY := uint16((Cam.P.Y + winY) / tileSize)
+			screenPos := sdl.Rect{winX, winY, offsetX, offsetY}
 
-			if worldCellX <= 0 ||
-				worldCellX > WORLD_CELLS_X ||
-				worldCellY <= 0 ||
-				worldCellY > WORLD_CELLS_Y {
+			if worldCellX > uint16(s.CellsX) || worldCellY > uint16(s.CellsY) || worldCellX < 0 || worldCellY < 0 {
 				continue
 			}
 
@@ -364,15 +457,20 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 				Source = gfx
 			}
 
-			screenPos := sdl.Rect{winX, winY, offsetX, offsetY}
-			renderer.Copy(ts, Source, &screenPos)
+			renderer.Copy(s.TileSet, Source, &screenPos)
+			println(screenPos.X, screenPos.Y)
+
+			// renderer.SetDrawColor(0, 0, 255, 255)
+			// renderer.DrawRect(&screenPos)
 		}
 	}
+	println("=====")
 
 	CullMap = []*Solid{}
 
 	for _, obj := range Interactive {
 		scrPoint := worldToScreen(obj.Position, Cam)
+
 		if inScreen(scrPoint) {
 
 			pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
@@ -383,6 +481,9 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 				src = obj.Source
 			}
 			renderer.Copy(obj.Txt, src, &pos)
+
+			renderer.SetDrawColor(0, 255, 0, 255)
+			renderer.DrawRect(&pos)
 
 			CullMap = append(CullMap, &Solid{
 				Position:  obj.Position,
@@ -425,27 +526,37 @@ func renderScene(renderer *sdl.Renderer, ts *sdl.Texture, ss *sdl.Texture) {
 
 	// FLUSH FRAME
 	renderer.Present()
+}
 
+func calcPerc(v1 uint16, v2 uint16) float32 {
+	return (float32(v1) / float32(v2) * 100)
+}
+
+func worldToScreen(pos Vector2d, cam Camera) Vector2d {
+	return Vector2d{
+		X: pos.X - cam.P.X,
+		Y: pos.Y - cam.P.Y,
+	}
+}
+
+func inScreen(p Vector2d) bool {
+	return (p.X > (tileSize*-1) && p.X < winWidth &&
+		p.Y > (tileSize*-1) && p.Y < winHeight)
 }
 
 func depletHP(dmg uint16) {
-	hp := PC.CurrentHP
-	if hp <= 0 {
-		return
-	}
-	if hp-dmg < 0 {
-		hp = 0
+	if dmg > PC.CurrentHP {
+		PC.CurrentHP = 0
 	} else {
-		hp -= dmg
+		PC.CurrentHP -= dmg
 	}
-
-	PC.CurrentHP = hp
 }
 
 func BashDoor(a uint16) {
-	PC.Solid.Position.X = 200
-	PC.Solid.Position.Y = 100
+	change_scene(SCENES[1], nil)
 }
+
+var scene *Scene
 
 func main() {
 
@@ -481,77 +592,36 @@ func main() {
 
 	var running bool = true
 
-	renderer.SetDrawColor(0, 0, 255, 255)
-
-	buildDummyWorld(WORLD_CELLS_X, WORLD_CELLS_Y)
-
-	rand.Seed(int64(300 * WORLD_CELLS_X * WORLD_CELLS_Y))
-	for i := 0; i < 5000; i++ {
-
-		cX := rand.Int31n(WORLD_CELLS_X)
-		cY := rand.Int31n(WORLD_CELLS_Y)
-		obj_type := rand.Int31n(10)
-		pos := Vector2d{cX * tileSize, cY * tileSize}
-		sol := &Solid{}
-
-		switch obj_type {
-		case 1:
-			sol = &Solid{
-				Position:  pos,
-				Txt:       tilesetTxt,
-				Anim:      LAVA_ANIMATION,
-				Handlers:  LAVA_HANDLERS,
-				Collision: 0,
-			}
-			break
-		case 2:
-			sol = &Solid{
-				Position:  pos,
-				Txt:       tilesetTxt,
-				Source:    DOOR,
-				Anim:      nil,
-				Collision: 1,
-				Handlers: &InteractionHandlers{
-					OnActEvent: BashDoor,
-				},
-			}
-			break
-		}
-
-		Interactive = append(Interactive, sol)
-
+	for _, scn := range SCENES {
+		scn.TileSet = tilesetTxt
 	}
 
+	renderer.SetDrawColor(0, 0, 255, 255)
+	scene = SCENES[0]
+	change_scene(scene, nil)
+
 	for running {
-		running = catchEvents()
 		then := time.Now()
-		updateScene()
-		renderScene(renderer, tilesetTxt, spritesheetTxt)
+
+		scene.update()
+		scene.render(renderer, spritesheetTxt)
+
 		println((time.Since(then)) / time.Microsecond)
+		running = catchEvents()
 		sdl.Delay(24)
 	}
 }
 
-func buildDummyWorld(cellsX int, cellsY int) {
+func change_scene(new_scene *Scene, staring_pos *Vector2d) {
 
-	rand.Seed(int64(cellsX * cellsY))
+	new_scene.build()
+	Interactive = []*Solid{}
+	new_scene.populate(200)
+	scene = new_scene
 
-	for i := 0; i < cellsX; i++ {
-		rand.Seed(int64(cellsX * i))
-		for j := 0; j < cellsY; j++ {
+	PC.Solid.Position = new_scene.StartPoint
+	Cam.P = new_scene.CamPoint
 
-			seed := int64(i * j)
-			if seed%2 == 1 {
-				rand.Seed(seed)
-			}
-
-			tile := GRASS
-			r := rand.Int31n(100)
-			if r < 10 {
-				tile = DIRT
-			}
-
-			World[i][j] = tile
-		}
-	}
+	Cam.P.X = 0
+	Cam.P.Y = 0
 }
