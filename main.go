@@ -476,11 +476,9 @@ func (s *Scene) update() {
 	}
 }
 
-func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
-	var init int32 = 0
+func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 	var Source *sdl.Rect
-
-	var offsetX, offsetY int32 = tSz, tSz
+	var init int32 = 0
 
 	if Cam.P.X < 0 {
 		Cam.P.X = 0
@@ -490,8 +488,7 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 		Cam.P.Y = 0
 	}
 
-	renderer.Clear()
-
+	var offsetX, offsetY int32 = tSz, tSz
 	// Rendering the terrain
 	for winY := init; winY < winHeight; winY += offsetY {
 		for winX := init; winX < winWidth; winX += offsetX {
@@ -521,7 +518,9 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 			// renderer.DrawRect(&screenPos)
 		}
 	}
+}
 
+func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 	CullMap = []*Solid{}
 
 	for _, obj := range Interactive {
@@ -549,11 +548,9 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 			})
 		}
 	}
+}
 
-	// Rendering the PC
-	scrPos := worldToScreen(PC.Solid.Position, Cam)
-	pos := sdl.Rect{scrPos.X, scrPos.Y, tSz, tSz}
-	renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], &pos)
+func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 
 	// Gray overlay
 	renderer.SetDrawColor(60, 60, 60, 10)
@@ -568,23 +565,31 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	// MANA BAR BG
 	renderer.SetDrawColor(190, 0, 120, 255)
 	renderer.FillRect(&sdl.Rect{10, 24, 100, 4})
-
-	// MANA BAR FG
 	renderer.SetDrawColor(0, 0, 255, 255)
-	x := int32(calcPerc(PC.CurrentST, PC.MaxST))
-	renderer.FillRect(&sdl.Rect{10, 24, x, 4})
+	renderer.FillRect(&sdl.Rect{10, 24, int32(calcPerc(PC.CurrentST, PC.MaxST)), 4})
 
 	for i, b := range PC.Buffs {
 		pos := sdl.Rect{8 + (int32(i) * 32), 32, 24, 24}
 		renderer.Copy(powerupsTxt, b.Ico, &pos)
 	}
-
 	for _, el := range GUI {
 		scrPos := worldToScreen(el, Cam)
-		rect := &sdl.Rect{scrPos.X, scrPos.Y, el.W, el.H}
 		renderer.SetDrawColor(255, 0, 0, 255)
-		renderer.DrawRect(rect)
+		renderer.DrawRect(scrPos)
 	}
+}
+
+func (s *Scene) render(renderer *sdl.Renderer) {
+	renderer.Clear()
+
+	s._terrainRender(renderer)
+	s._solidsRender(renderer)
+
+	// Rendering the PC
+	scrPos := worldToScreen(PC.Solid.Position, Cam)
+	renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], scrPos)
+
+	s._GUIRender(renderer)
 
 	// FLUSH FRAME
 	renderer.Present()
@@ -672,7 +677,7 @@ func main() {
 		then := time.Now()
 
 		scene.update()
-		scene.render(renderer, spritesheetTxt)
+		scene.render(renderer)
 
 		println((time.Since(then)) / time.Microsecond)
 		running = catchEvents()
