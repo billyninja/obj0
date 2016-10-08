@@ -61,6 +61,7 @@ type InteractionHandlers struct {
 type Solid struct {
 	Position  *sdl.Rect
 	Source    *sdl.Rect
+	Facing    Facing
 	Anim      *Animation
 	Handlers  *InteractionHandlers
 	Txt       *sdl.Texture
@@ -98,7 +99,14 @@ type Char struct {
 	MaxST     uint16
 }
 
-func Facing() Vector2d {
+type Facing struct {
+	Up    [8]*sdl.Rect
+	Down  [8]*sdl.Rect
+	Left  [8]*sdl.Rect
+	Right [8]*sdl.Rect
+}
+
+func SFacing() Vector2d {
 	off := Vector2d{0, 0}
 	switch PC.Solid.Anim.Action {
 	case MAN_WALK_BACK:
@@ -192,6 +200,13 @@ var (
 		PoseTick: 16,
 	}
 
+	DEFAULT_FACING = Facing{
+		Up:    MAN_WALK_BACK,
+		Down:  MAN_WALK_FRONT,
+		Left:  MAN_WALK_LEFT,
+		Right: MAN_WALK_RIGHT,
+	}
+
 	LAVA_HANDLERS = &InteractionHandlers{
 		OnCollDmg: 3,
 	}
@@ -265,7 +280,7 @@ func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 }
 
 func actProc() {
-	action_hit_box := ActHitBox(PC.Solid.Position, Facing())
+	action_hit_box := ActHitBox(PC.Solid.Position, SFacing())
 
 	// Debug hint
 	GUI = append(GUI, action_hit_box)
@@ -454,6 +469,7 @@ func (s *Scene) populate(population int) {
 					Position:  absolute_pos,
 					Txt:       slimeTxt,
 					Collision: 1,
+					Facing:    DEFAULT_FACING,
 					Anim: &Animation{
 						Action:   MAN_WALK_FRONT,
 						Pose:     0,
@@ -479,7 +495,10 @@ func (s *Scene) populate(population int) {
 	}
 }
 
-var EventTick uint8 = 16
+var (
+	EventTick uint8 = 16
+	AiTick          = 16
+)
 
 func (s *Scene) update() {
 	EventTick -= 1
@@ -513,28 +532,60 @@ func (s *Scene) update() {
 	}
 
 	// updating AI
-	for _, m := range Monsters {
-		if !inScreen(worldToScreen(m.Solid.Position, Cam)) {
-			continue
-		}
-
-		anon := func(c uint32, mvs []Movement) *Movement {
-			var sum uint32 = 0
-			for _, mp := range mvs {
-				sum += uint32(mp.Ticks)
-				if sum > m.CPattern {
-					return &mp
-				}
+	AiTick -= 1
+	if AiTick == 0 {
+		for _, m := range Monsters {
+			if !inScreen(worldToScreen(m.Solid.Position, Cam)) {
+				continue
 			}
-			m.CPattern = 0
-			return nil
+
+			anon := func(c uint32, mvs []Movement) *Movement {
+				var sum uint32 = 0
+				for _, mp := range mvs {
+					sum += uint32(mp.Ticks)
+					if sum > m.CPattern {
+						return &mp
+					}
+				}
+				m.CPattern = 0
+				return nil
+			}
+			mov := anon(m.CPattern, m.MPattern)
+			if mov != nil {
+				applyMov(m.Solid.Position, mov.Orientation, m.Speed)
+				m.CPattern += uint32(m.Speed)
+				na := GetFacing(&m.Solid.Facing, mov.Orientation)
+				if na == m.Solid.Anim.Action {
+					continue
+				} else {
+					m.Solid.Anim.Action = na
+					//m.Solid.Anim.Pose = 0
+					//m.Solid.Anim.PoseTick = 0
+				}
+
+			}
 		}
-		mov := anon(m.CPattern, m.MPattern)
-		if mov != nil {
-			applyMov(m.Solid.Position, mov.Orientation, m.Speed)
-			m.CPattern += uint32(m.Speed)
-		}
+		AiTick = 3
 	}
+}
+
+func GetFacing(f *Facing, o Vector2d) [8]*sdl.Rect {
+	if o.X == -1 {
+		return f.Left
+	}
+
+	if o.X == 1 {
+		return f.Right
+	}
+
+	if o.Y == 1 {
+		return f.Down
+	}
+
+	if o.Y == -1 {
+		return f.Up
+	}
+	return f.Down
 }
 
 func applyMov(p *sdl.Rect, o Vector2d, s int32) {
@@ -626,7 +677,7 @@ func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 		if inScreen(scrPos) {
 
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
-			renderer.Copy(mon.Solid.Txt, src, scrPos)
+			renderer.Copy(spritesheetTxt, src, scrPos)
 			renderer.DrawRect(scrPos)
 
 			CullMap = append(CullMap, &Solid{
