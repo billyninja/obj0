@@ -47,7 +47,7 @@ type Camera struct {
 	DZy int32
 }
 
-type Event func(uint16)
+type Event func(obj *Solid)
 
 type InteractionHandlers struct {
 	OnCollDmg   uint16
@@ -73,8 +73,18 @@ type Animation struct {
 	PoseTick uint32
 }
 
+type PowerUp struct {
+	Code        uint8
+	Name        string
+	Description string
+	Ico         *sdl.Rect
+	IcoTxt      *sdl.Texture
+}
+
 type Char struct {
 	Solid *Solid
+
+	Buffs []*PowerUp
 
 	Speed     int32
 	CurrentHP uint16
@@ -111,12 +121,21 @@ func ActHitBox(source, facing Vector2d) *sdl.Rect {
 var (
 	winTitle string = "Go-SDL2 Obj0"
 	event    sdl.Event
-	GRASS    *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
-	TREE     *sdl.Rect = &sdl.Rect{0, 32, tileSize, tileSize}
-	DIRT     *sdl.Rect = &sdl.Rect{703, 0, tileSize, tileSize}
-	WALL     *sdl.Rect = &sdl.Rect{0, 64, tileSize, tileSize}
-	DOOR     *sdl.Rect = &sdl.Rect{256, 32, tileSize, tileSize}
-	WOMAN    *sdl.Rect = &sdl.Rect{0, 128, tileSize, tileSize}
+
+	tilesetTxt     *sdl.Texture = nil
+	spritesheetTxt *sdl.Texture = nil
+	particlesTxt   *sdl.Texture = nil
+	powerupsTxt    *sdl.Texture = nil
+	glowTxt        *sdl.Texture = nil
+
+	GRASS     *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
+	TREE                = &sdl.Rect{0, 32, tileSize, tileSize}
+	DIRT                = &sdl.Rect{703, 0, tileSize, tileSize}
+	WALL                = &sdl.Rect{0, 64, tileSize, tileSize}
+	DOOR                = &sdl.Rect{256, 32, tileSize, tileSize}
+	WOMAN               = &sdl.Rect{0, 128, tileSize, tileSize}
+	BF_ATK_UP           = &sdl.Rect{72, 24, 24, 24}
+	BF_DEF_UP           = &sdl.Rect{96, 24, 24, 24}
 
 	// MAIN CHAR POSES AND ANIMATIONS
 	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
@@ -150,14 +169,37 @@ var (
 
 	LAVA_A [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
 
-	LAVA_ANIMATION = &Animation{
+	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
+	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, tileSize, tileSize}
+	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, tileSize, tileSize}
+
+	YGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{YGLOW_S1, YGLOW_S2, YGLOW_S3, YGLOW_S2}
+
+	LAVA_ANIM = &Animation{
 		Action:   LAVA_A,
+		Pose:     0,
+		PoseTick: 16,
+	}
+
+	LIFE_ORB_ANIM = &Animation{
+		Action:   YGLOW_A,
 		Pose:     0,
 		PoseTick: 16,
 	}
 
 	LAVA_HANDLERS = &InteractionHandlers{
 		OnCollDmg: 3,
+	}
+
+	ATK_UP *PowerUp = &PowerUp{
+		Name:        "Attack up!",
+		Description: "+20% dgm. dealed",
+		Ico:         BF_ATK_UP,
+	}
+	DEF_UP *PowerUp = &PowerUp{
+		Name:        "Defense up!",
+		Description: "+20% dgm. reduction",
+		Ico:         BF_DEF_UP,
 	}
 
 	SCENES []*Scene = []*Scene{
@@ -174,29 +216,27 @@ var (
 			codename:   "cave",
 			CellsX:     15,
 			CellsY:     20,
-			CamPoint:   Vector2d{120, 120},
-			StartPoint: Vector2d{50, 50},
+			StartPoint: Vector2d{100, 100},
+			CamPoint:   Vector2d{0, 0},
 			tileA:      DIRT,
 			tileB:      LAVA_S1,
 		},
 	}
-)
 
-var (
 	Cam = Camera{
-		P:   Vector2d{300, 300},
 		DZx: 30,
 		DZy: 60,
 	}
+
 	PC = Char{
 		Solid: &Solid{
-			Position: Vector2d{Cam.P.X + 120, Cam.P.Y + 90},
 			Anim: &Animation{
 				Action:   MAN_WALK_FRONT,
 				Pose:     0,
 				PoseTick: 16,
 			},
 		},
+		Buffs:     []*PowerUp{ATK_UP, DEF_UP},
 		Speed:     1,
 		CurrentHP: 220,
 		MaxHP:     250,
@@ -204,6 +244,7 @@ var (
 		MaxST:     100,
 	}
 
+	scene       *Scene
 	World       [][]*sdl.Rect
 	Interactive []*Solid
 	GUI         []*sdl.Rect
@@ -228,7 +269,7 @@ func actProc() {
 		if obj.Handlers != nil &&
 			obj.Handlers.OnActEvent != nil &&
 			checkCol(action_origin, obj.Position) {
-			obj.Handlers.OnActEvent(1)
+			obj.Handlers.OnActEvent(obj)
 			return
 		}
 	}
@@ -348,9 +389,6 @@ func (s *Scene) build() {
 
 func (s *Scene) populate(population int) {
 
-	//Interactive = []*Solid{}
-	//Interactive = make([]*Solid, population)
-
 	for i := 0; i < population; i++ {
 
 		cX := rand.Int31n(s.CellsX)
@@ -365,10 +403,11 @@ func (s *Scene) populate(population int) {
 			sol = &Solid{
 				Position:  absolute_pos,
 				Txt:       s.TileSet,
-				Anim:      LAVA_ANIMATION,
+				Anim:      LAVA_ANIM,
 				Handlers:  LAVA_HANDLERS,
 				Collision: 0,
 			}
+			Interactive = append(Interactive, sol)
 			break
 		case 2:
 			sol = &Solid{
@@ -381,10 +420,18 @@ func (s *Scene) populate(population int) {
 					OnActEvent: BashDoor,
 				},
 			}
+			Interactive = append(Interactive, sol)
+			break
+		case 3:
+			sol = &Solid{
+				Position:  absolute_pos,
+				Txt:       glowTxt,
+				Anim:      LIFE_ORB_ANIM,
+				Collision: 0,
+			}
+			Interactive = append(Interactive, sol)
 			break
 		}
-
-		Interactive = append(Interactive, sol)
 	}
 }
 
@@ -458,13 +505,11 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 			}
 
 			renderer.Copy(s.TileSet, Source, &screenPos)
-			println(screenPos.X, screenPos.Y)
 
 			// renderer.SetDrawColor(0, 0, 255, 255)
 			// renderer.DrawRect(&screenPos)
 		}
 	}
-	println("=====")
 
 	CullMap = []*Solid{}
 
@@ -498,24 +543,31 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	// Rendering the PC
 	scrPoint := worldToScreen(PC.Solid.Position, Cam)
 	pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
-	renderer.Copy(ss, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], &pos)
+	renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], &pos)
 
-	// HEALTH BAR BG
+	// Gray overlay
+	renderer.SetDrawColor(60, 60, 60, 10)
+	renderer.FillRect(&sdl.Rect{0, 0, 120, 60})
+
+	// HEALTH BAR
 	renderer.SetDrawColor(255, 0, 0, 255)
-	renderer.FillRect(&sdl.Rect{20, 20, 100, 12})
-
-	// HEALTH BAR FG
+	renderer.FillRect(&sdl.Rect{10, 10, 100, 4})
 	renderer.SetDrawColor(0, 255, 0, 255)
-	renderer.FillRect(&sdl.Rect{20, 20, int32(calcPerc(PC.CurrentHP, PC.MaxHP)), 12})
+	renderer.FillRect(&sdl.Rect{10, 10, int32(calcPerc(PC.CurrentHP, PC.MaxHP)), 4})
 
 	// MANA BAR BG
-	renderer.SetDrawColor(60, 60, 60, 255)
-	renderer.FillRect(&sdl.Rect{20, 40, 100, 12})
+	renderer.SetDrawColor(190, 0, 120, 255)
+	renderer.FillRect(&sdl.Rect{10, 24, 100, 4})
 
 	// MANA BAR FG
 	renderer.SetDrawColor(0, 0, 255, 255)
 	x := int32(calcPerc(PC.CurrentST, PC.MaxST))
-	renderer.FillRect(&sdl.Rect{20, 40, x, 12})
+	renderer.FillRect(&sdl.Rect{10, 24, x, 4})
+
+	for i, b := range PC.Buffs {
+		pos := sdl.Rect{((int32(i+1) * 24) + 12), 32, 24, 24}
+		renderer.Copy(powerupsTxt, b.Ico, &pos)
+	}
 
 	for _, el := range GUI {
 		scrPoint := worldToScreen(Vector2d{el.X, el.Y}, Cam)
@@ -552,11 +604,9 @@ func depletHP(dmg uint16) {
 	}
 }
 
-func BashDoor(a uint16) {
+func BashDoor(obj *Solid) {
 	change_scene(SCENES[1], nil)
 }
-
-var scene *Scene
 
 func main() {
 
@@ -575,20 +625,32 @@ func main() {
 	tilesetImg, _ := img.Load("assets/textures/ts1.png")
 	defer tilesetImg.Free()
 
-	tilesetTxt, _ := renderer.CreateTextureFromSurface(tilesetImg)
+	tilesetTxt, _ = renderer.CreateTextureFromSurface(tilesetImg)
 	defer tilesetTxt.Destroy()
 
 	spritesheetImg, _ := img.Load("assets/textures/actor3.png")
 	defer spritesheetImg.Free()
 
-	spritesheetTxt, _ := renderer.CreateTextureFromSurface(spritesheetImg)
+	spritesheetTxt, _ = renderer.CreateTextureFromSurface(spritesheetImg)
 	defer spritesheetTxt.Destroy()
 
 	particlesImg, _ := img.Load("assets/textures/actor3.png")
 	defer particlesImg.Free()
 
-	particlesTxt, _ := renderer.CreateTextureFromSurface(particlesImg)
+	particlesTxt, _ = renderer.CreateTextureFromSurface(particlesImg)
 	defer particlesTxt.Destroy()
+
+	powerupsImg, _ := img.Load("assets/textures/powerups_ts.png")
+	defer powerupsImg.Free()
+
+	powerupsTxt, _ = renderer.CreateTextureFromSurface(powerupsImg)
+	defer powerupsTxt.Destroy()
+
+	glowImg, _ := img.Load("assets/textures/glowing_ts.png")
+	defer glowImg.Free()
+
+	glowTxt, _ = renderer.CreateTextureFromSurface(glowImg)
+	defer glowTxt.Destroy()
 
 	var running bool = true
 
@@ -621,7 +683,4 @@ func change_scene(new_scene *Scene, staring_pos *Vector2d) {
 
 	PC.Solid.Position = new_scene.StartPoint
 	Cam.P = new_scene.CamPoint
-
-	Cam.P.X = 0
-	Cam.P.Y = 0
 }
