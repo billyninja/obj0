@@ -169,9 +169,9 @@ var (
 
 	LAVA_A [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
 
-	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
-	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, tSz, tSz}
-	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, tSz, tSz}
+	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, tSz * 2, tSz * 2}
+	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, tSz * 2, tSz * 2}
+	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, tSz * 2, tSz * 2}
 
 	YGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{YGLOW_S1, YGLOW_S2, YGLOW_S3, YGLOW_S2}
 
@@ -408,7 +408,7 @@ func (s *Scene) populate(population int) {
 			sol = &Solid{
 				Position:  absolute_pos,
 				Txt:       s.TileSet,
-				Anim:      *LAVA_ANIM,
+				Anim:      LAVA_ANIM,
 				Handlers:  LAVA_HANDLERS,
 				Collision: 0,
 			}
@@ -428,6 +428,8 @@ func (s *Scene) populate(population int) {
 			Interactive = append(Interactive, sol)
 			break
 		case 3:
+			absolute_pos.H = 64
+			absolute_pos.W = 64
 			sol = &Solid{
 				Position:  absolute_pos,
 				Txt:       glowTxt,
@@ -527,17 +529,16 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 
 		if inScreen(R2Vo(scrPos)) {
 
-			pos := sdl.Rect{scrPos.X, scrPos.Y, tSz, tSz}
 			var src *sdl.Rect
 			if obj.Anim != nil {
 				src = obj.Anim.Action[obj.Anim.Pose]
 			} else {
 				src = obj.Source
 			}
-			renderer.Copy(obj.Txt, src, &pos)
+			renderer.Copy(obj.Txt, src, scrPos)
 
 			renderer.SetDrawColor(0, 255, 0, 255)
-			renderer.DrawRect(&pos)
+			renderer.DrawRect(scrPos)
 
 			CullMap = append(CullMap, &Solid{
 				Position:  obj.Position,
