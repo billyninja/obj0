@@ -12,9 +12,9 @@ import (
 
 const (
 	winWidth, winHeight int32 = 640, 480
-	tileSize                  = 32
-	cY                        = winHeight / tileSize
-	cX                        = winWidth / tileSize
+	tSz                       = 32
+	cY                        = winHeight / tSz
+	cX                        = winWidth / tSz
 	WORLD_CELLS_X             = 500
 	WORLD_CELLS_Y             = 200
 	KEY_ARROW_UP              = 1073741906
@@ -59,7 +59,7 @@ type InteractionHandlers struct {
 }
 
 type Solid struct {
-	Position  Vector2d
+	Position  *sdl.Rect
 	Source    *sdl.Rect
 	Anim      *Animation
 	Handlers  *InteractionHandlers
@@ -109,12 +109,12 @@ func Facing() Vector2d {
 	return off
 }
 
-func ActHitBox(source, facing Vector2d) *sdl.Rect {
+func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
 	return &sdl.Rect{
-		source.X + (facing.X * tileSize),
-		source.Y + (facing.Y * tileSize),
-		tileSize,
-		tileSize,
+		source.X + (facing.X * tSz),
+		source.Y + (facing.Y * tSz),
+		tSz,
+		tSz,
 	}
 }
 
@@ -128,50 +128,50 @@ var (
 	powerupsTxt    *sdl.Texture = nil
 	glowTxt        *sdl.Texture = nil
 
-	GRASS     *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
-	TREE                = &sdl.Rect{0, 32, tileSize, tileSize}
-	DIRT                = &sdl.Rect{703, 0, tileSize, tileSize}
-	WALL                = &sdl.Rect{0, 64, tileSize, tileSize}
-	DOOR                = &sdl.Rect{256, 32, tileSize, tileSize}
-	WOMAN               = &sdl.Rect{0, 128, tileSize, tileSize}
+	GRASS     *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
+	TREE                = &sdl.Rect{0, 32, tSz, tSz}
+	DIRT                = &sdl.Rect{703, 0, tSz, tSz}
+	WALL                = &sdl.Rect{0, 64, tSz, tSz}
+	DOOR                = &sdl.Rect{256, 32, tSz, tSz}
+	WOMAN               = &sdl.Rect{0, 128, tSz, tSz}
 	BF_ATK_UP           = &sdl.Rect{72, 24, 24, 24}
 	BF_DEF_UP           = &sdl.Rect{96, 24, 24, 24}
 
 	// MAIN CHAR POSES AND ANIMATIONS
-	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
-	MAN_FRONT_N *sdl.Rect = &sdl.Rect{32, 0, tileSize, tileSize}
-	MAN_FRONT_L *sdl.Rect = &sdl.Rect{64, 0, tileSize, tileSize}
-	MAN_LEFT_R  *sdl.Rect = &sdl.Rect{0, 32, tileSize, tileSize}
-	MAN_LEFT_N  *sdl.Rect = &sdl.Rect{32, 32, tileSize, tileSize}
-	MAN_LEFT_L  *sdl.Rect = &sdl.Rect{64, 32, tileSize, tileSize}
-	MAN_RIGHT_R *sdl.Rect = &sdl.Rect{0, 64, tileSize, tileSize}
-	MAN_RIGHT_N *sdl.Rect = &sdl.Rect{32, 64, tileSize, tileSize}
-	MAN_RIGHT_L *sdl.Rect = &sdl.Rect{64, 64, tileSize, tileSize}
-	MAN_BACK_R  *sdl.Rect = &sdl.Rect{0, 96, tileSize, tileSize}
-	MAN_BACK_N  *sdl.Rect = &sdl.Rect{32, 96, tileSize, tileSize}
-	MAN_BACK_L  *sdl.Rect = &sdl.Rect{64, 96, tileSize, tileSize}
+	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
+	MAN_FRONT_N *sdl.Rect = &sdl.Rect{32, 0, tSz, tSz}
+	MAN_FRONT_L *sdl.Rect = &sdl.Rect{64, 0, tSz, tSz}
+	MAN_LEFT_R  *sdl.Rect = &sdl.Rect{0, 32, tSz, tSz}
+	MAN_LEFT_N  *sdl.Rect = &sdl.Rect{32, 32, tSz, tSz}
+	MAN_LEFT_L  *sdl.Rect = &sdl.Rect{64, 32, tSz, tSz}
+	MAN_RIGHT_R *sdl.Rect = &sdl.Rect{0, 64, tSz, tSz}
+	MAN_RIGHT_N *sdl.Rect = &sdl.Rect{32, 64, tSz, tSz}
+	MAN_RIGHT_L *sdl.Rect = &sdl.Rect{64, 64, tSz, tSz}
+	MAN_BACK_R  *sdl.Rect = &sdl.Rect{0, 96, tSz, tSz}
+	MAN_BACK_N  *sdl.Rect = &sdl.Rect{32, 96, tSz, tSz}
+	MAN_BACK_L  *sdl.Rect = &sdl.Rect{64, 96, tSz, tSz}
 
 	MAN_WALK_FRONT [8]*sdl.Rect = [8]*sdl.Rect{MAN_FRONT_N, MAN_FRONT_R, MAN_FRONT_N, MAN_FRONT_L}
 	MAN_WALK_LEFT  [8]*sdl.Rect = [8]*sdl.Rect{MAN_LEFT_N, MAN_LEFT_R, MAN_LEFT_N, MAN_LEFT_L}
 	MAN_WALK_RIGHT [8]*sdl.Rect = [8]*sdl.Rect{MAN_RIGHT_N, MAN_RIGHT_R, MAN_RIGHT_N, MAN_RIGHT_L}
 	MAN_WALK_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_BACK_N, MAN_BACK_R, MAN_BACK_N, MAN_BACK_L}
 
-	EXPLOSION_S1 *sdl.Rect = &sdl.Rect{128, 0, tileSize, tileSize}
-	EXPLOSION_S2 *sdl.Rect = &sdl.Rect{128, 32, tileSize, tileSize}
-	EXPLOSION_S3 *sdl.Rect = &sdl.Rect{128, 64, tileSize, tileSize}
-	EXPLOSION_S4 *sdl.Rect = &sdl.Rect{128, 96, tileSize, tileSize}
+	EXPLOSION_S1 *sdl.Rect = &sdl.Rect{128, 0, tSz, tSz}
+	EXPLOSION_S2 *sdl.Rect = &sdl.Rect{128, 32, tSz, tSz}
+	EXPLOSION_S3 *sdl.Rect = &sdl.Rect{128, 64, tSz, tSz}
+	EXPLOSION_S4 *sdl.Rect = &sdl.Rect{128, 96, tSz, tSz}
 
 	EXPLOSION_A [8]*sdl.Rect = [8]*sdl.Rect{EXPLOSION_S1, EXPLOSION_S2, EXPLOSION_S3, EXPLOSION_S4}
 
-	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, tileSize, tileSize}
-	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, tileSize, tileSize}
-	LAVA_S3 *sdl.Rect = &sdl.Rect{256, 0, tileSize, tileSize}
+	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, tSz, tSz}
+	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, tSz, tSz}
+	LAVA_S3 *sdl.Rect = &sdl.Rect{256, 0, tSz, tSz}
 
 	LAVA_A [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
 
-	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, tileSize, tileSize}
-	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, tileSize, tileSize}
-	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, tileSize, tileSize}
+	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
+	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, tSz, tSz}
+	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, tSz, tSz}
 
 	YGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{YGLOW_S1, YGLOW_S2, YGLOW_S3, YGLOW_S2}
 
@@ -251,16 +251,15 @@ var (
 	CullMap     []*Solid
 )
 
-func checkCol(p1 Vector2d, p2 Vector2d) bool {
-	return (p1.X < p2.X+tileSize &&
-		p1.X+tileSize > p2.X &&
-		p1.Y < p2.Y+tileSize &&
-		p1.Y+tileSize > p2.Y)
+func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
+	return (r1.X < (r2.X+r2.W) &&
+		r1.X+r1.W > r2.X &&
+		r1.Y < r2.Y+r2.H &&
+		r1.Y+r1.H > r2.Y)
 }
 
 func actProc() {
 	action_hit_box := ActHitBox(PC.Solid.Position, Facing())
-	action_origin := Vector2d{action_hit_box.X, action_hit_box.Y}
 
 	// Debug hint
 	GUI = append(GUI, action_hit_box)
@@ -268,7 +267,7 @@ func actProc() {
 	for _, obj := range CullMap {
 		if obj.Handlers != nil &&
 			obj.Handlers.OnActEvent != nil &&
-			checkCol(action_origin, obj.Position) {
+			checkCol(action_hit_box, obj.Position) {
 			obj.Handlers.OnActEvent(obj)
 			return
 		}
@@ -276,7 +275,12 @@ func actProc() {
 }
 
 func handleKeyEvent(key sdl.Keycode) {
-	np := Vector2d{PC.Solid.Position.X, PC.Solid.Position.Y}
+	np := &sdl.Rect{
+		PC.Solid.Position.X,
+		PC.Solid.Position.Y,
+		PC.Solid.Position.W,
+		PC.Solid.Position.H,
+	}
 
 	switch key {
 	case KEY_SPACE_BAR:
@@ -301,7 +305,7 @@ func handleKeyEvent(key sdl.Keycode) {
 
 	// TODO CLEAN THIS UP
 	var outbound bool = (np.X <= 0 || np.Y <= 0 ||
-		np.X > int32(len(World)*tileSize) || np.Y > int32(len(World[0])*tileSize))
+		np.X > int32(len(World)*tSz) || np.Y > int32(len(World[0])*tSz))
 
 	if np.X == PC.Solid.Position.X && np.Y == PC.Solid.Position.Y || outbound {
 		PC.Solid.Anim.Pose = 0
@@ -309,7 +313,8 @@ func handleKeyEvent(key sdl.Keycode) {
 	}
 
 	for _, obj := range CullMap {
-		if checkCol(np, obj.Position) && obj.Collision == 1 {
+		fr := feetRect(np)
+		if checkCol(fr, obj.Position) && obj.Collision == 1 {
 			return
 		}
 	}
@@ -319,16 +324,16 @@ func handleKeyEvent(key sdl.Keycode) {
 		Cam.P.X -= (Cam.DZx - newScreenPos.X)
 	}
 
-	if (winWidth - Cam.DZx) < (newScreenPos.X + tileSize) {
-		Cam.P.X += (newScreenPos.X + tileSize) - (winWidth - Cam.DZx)
+	if (winWidth - Cam.DZx) < (newScreenPos.X + tSz) {
+		Cam.P.X += (newScreenPos.X + tSz) - (winWidth - Cam.DZx)
 	}
 
 	if (Cam.DZy - newScreenPos.Y) > 0 {
 		Cam.P.Y -= (Cam.DZy - newScreenPos.Y)
 	}
 
-	if (winHeight - Cam.DZy) < (newScreenPos.Y + tileSize) {
-		Cam.P.Y += (newScreenPos.Y + tileSize) - (winHeight - Cam.DZy)
+	if (winHeight - Cam.DZy) < (newScreenPos.Y + tSz) {
+		Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
 	}
 
 	PC.Solid.Position = np
@@ -394,7 +399,7 @@ func (s *Scene) populate(population int) {
 		cX := rand.Int31n(s.CellsX)
 		cY := rand.Int31n(s.CellsY)
 
-		absolute_pos := Vector2d{cX * tileSize, cY * tileSize}
+		absolute_pos := &sdl.Rect{cX * tSz, cY * tSz, tSz, tSz}
 		obj_type := rand.Int31n(10)
 		sol := &Solid{}
 
@@ -403,7 +408,7 @@ func (s *Scene) populate(population int) {
 			sol = &Solid{
 				Position:  absolute_pos,
 				Txt:       s.TileSet,
-				Anim:      LAVA_ANIM,
+				Anim:      *LAVA_ANIM,
 				Handlers:  LAVA_HANDLERS,
 				Collision: 0,
 			}
@@ -441,8 +446,12 @@ func (s *Scene) update() {
 	EventTick -= 1
 	if EventTick == 0 {
 		for _, obj := range CullMap {
-			if checkCol(PC.Solid.Position, obj.Position) {
-				if obj.Handlers != nil && obj.Handlers.OnCollDmg != 0 {
+			if obj.Handlers == nil {
+				continue
+			}
+			fr := feetRect(PC.Solid.Position)
+			if checkCol(fr, obj.Position) {
+				if obj.Handlers.OnCollDmg != 0 {
 					depletHP(obj.Handlers.OnCollDmg)
 				}
 			}
@@ -469,7 +478,7 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	var init int32 = 0
 	var Source *sdl.Rect
 
-	var offsetX, offsetY int32 = tileSize, tileSize
+	var offsetX, offsetY int32 = tSz, tSz
 
 	if Cam.P.X < 0 {
 		Cam.P.X = 0
@@ -485,11 +494,11 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	for winY := init; winY < winHeight; winY += offsetY {
 		for winX := init; winX < winWidth; winX += offsetX {
 
-			offsetX = (tileSize - ((Cam.P.X + winX) % tileSize))
-			offsetY = (tileSize - ((Cam.P.Y + winY) % tileSize))
+			offsetX = (tSz - ((Cam.P.X + winX) % tSz))
+			offsetY = (tSz - ((Cam.P.Y + winY) % tSz))
 
-			worldCellX := uint16((Cam.P.X + winX) / tileSize)
-			worldCellY := uint16((Cam.P.Y + winY) / tileSize)
+			worldCellX := uint16((Cam.P.X + winX) / tSz)
+			worldCellY := uint16((Cam.P.Y + winY) / tSz)
 			screenPos := sdl.Rect{winX, winY, offsetX, offsetY}
 
 			if worldCellX > uint16(s.CellsX) || worldCellY > uint16(s.CellsY) || worldCellX < 0 || worldCellY < 0 {
@@ -498,8 +507,8 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 
 			gfx := World[worldCellX][worldCellY]
 
-			if offsetX != int32(tileSize) || offsetY != int32(tileSize) {
-				Source = &sdl.Rect{gfx.X + (tileSize - offsetX), gfx.Y + (tileSize - offsetY), offsetX, offsetY}
+			if offsetX != int32(tSz) || offsetY != int32(tSz) {
+				Source = &sdl.Rect{gfx.X + (tSz - offsetX), gfx.Y + (tSz - offsetY), offsetX, offsetY}
 			} else {
 				Source = gfx
 			}
@@ -514,11 +523,11 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	CullMap = []*Solid{}
 
 	for _, obj := range Interactive {
-		scrPoint := worldToScreen(obj.Position, Cam)
+		scrPos := worldToScreen(obj.Position, Cam)
 
-		if inScreen(scrPoint) {
+		if inScreen(R2Vo(scrPos)) {
 
-			pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
+			pos := sdl.Rect{scrPos.X, scrPos.Y, tSz, tSz}
 			var src *sdl.Rect
 			if obj.Anim != nil {
 				src = obj.Anim.Action[obj.Anim.Pose]
@@ -541,8 +550,8 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	}
 
 	// Rendering the PC
-	scrPoint := worldToScreen(PC.Solid.Position, Cam)
-	pos := sdl.Rect{scrPoint.X, scrPoint.Y, tileSize, tileSize}
+	scrPos := worldToScreen(PC.Solid.Position, Cam)
+	pos := sdl.Rect{scrPos.X, scrPos.Y, tSz, tSz}
 	renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], &pos)
 
 	// Gray overlay
@@ -565,13 +574,13 @@ func (s *Scene) render(renderer *sdl.Renderer, ss *sdl.Texture) {
 	renderer.FillRect(&sdl.Rect{10, 24, x, 4})
 
 	for i, b := range PC.Buffs {
-		pos := sdl.Rect{((int32(i+1) * 24) + 12), 32, 24, 24}
+		pos := sdl.Rect{8 + (int32(i) * 32), 32, 24, 24}
 		renderer.Copy(powerupsTxt, b.Ico, &pos)
 	}
 
 	for _, el := range GUI {
-		scrPoint := worldToScreen(Vector2d{el.X, el.Y}, Cam)
-		rect := &sdl.Rect{scrPoint.X, scrPoint.Y, el.W, el.H}
+		scrPos := worldToScreen(el, Cam)
+		rect := &sdl.Rect{scrPos.X, scrPos.Y, el.W, el.H}
 		renderer.SetDrawColor(255, 0, 0, 255)
 		renderer.DrawRect(rect)
 	}
@@ -584,16 +593,18 @@ func calcPerc(v1 uint16, v2 uint16) float32 {
 	return (float32(v1) / float32(v2) * 100)
 }
 
-func worldToScreen(pos Vector2d, cam Camera) Vector2d {
-	return Vector2d{
-		X: pos.X - cam.P.X,
-		Y: pos.Y - cam.P.Y,
+func worldToScreen(pos *sdl.Rect, cam Camera) *sdl.Rect {
+	return &sdl.Rect{
+		pos.X - cam.P.X,
+		pos.Y - cam.P.Y,
+		pos.W,
+		pos.H,
 	}
 }
 
 func inScreen(p Vector2d) bool {
-	return (p.X > (tileSize*-1) && p.X < winWidth &&
-		p.Y > (tileSize*-1) && p.Y < winHeight)
+	return (p.X > (tSz*-1) && p.X < winWidth &&
+		p.Y > (tSz*-1) && p.Y < winHeight)
 }
 
 func depletHP(dmg uint16) {
@@ -628,17 +639,11 @@ func main() {
 	tilesetTxt, _ = renderer.CreateTextureFromSurface(tilesetImg)
 	defer tilesetTxt.Destroy()
 
-	spritesheetImg, _ := img.Load("assets/textures/actor3.png")
+	spritesheetImg, _ := img.Load("assets/textures/main_char.png")
 	defer spritesheetImg.Free()
 
 	spritesheetTxt, _ = renderer.CreateTextureFromSurface(spritesheetImg)
 	defer spritesheetTxt.Destroy()
-
-	particlesImg, _ := img.Load("assets/textures/actor3.png")
-	defer particlesImg.Free()
-
-	particlesTxt, _ = renderer.CreateTextureFromSurface(particlesImg)
-	defer particlesTxt.Destroy()
 
 	powerupsImg, _ := img.Load("assets/textures/powerups_ts.png")
 	defer powerupsImg.Free()
@@ -670,8 +675,16 @@ func main() {
 
 		println((time.Since(then)) / time.Microsecond)
 		running = catchEvents()
-		sdl.Delay(24)
+		sdl.Delay(12)
 	}
+}
+
+func V2R(v Vector2d, w int32, h int32) *sdl.Rect {
+	return &sdl.Rect{v.X, v.Y, w, h}
+}
+
+func R2Vo(r *sdl.Rect) Vector2d {
+	return Vector2d{r.X, r.Y}
 }
 
 func change_scene(new_scene *Scene, staring_pos *Vector2d) {
@@ -681,6 +694,10 @@ func change_scene(new_scene *Scene, staring_pos *Vector2d) {
 	new_scene.populate(200)
 	scene = new_scene
 
-	PC.Solid.Position = new_scene.StartPoint
+	PC.Solid.Position = V2R(new_scene.StartPoint, tSz, tSz)
 	Cam.P = new_scene.CamPoint
+}
+
+func feetRect(pos *sdl.Rect) *sdl.Rect {
+	return &sdl.Rect{pos.X, pos.Y + 16, pos.W, pos.H - 16}
 }
