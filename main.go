@@ -73,6 +73,11 @@ type Animation struct {
 	PoseTick uint32
 }
 
+type Movement struct {
+	Orientation Vector2d
+	Ticks       uint8
+}
+
 type PowerUp struct {
 	Code        uint8
 	Name        string
@@ -82,14 +87,13 @@ type PowerUp struct {
 }
 
 type Char struct {
-	Solid *Solid
-
-	Buffs []*PowerUp
-
+	Solid     *Solid
+	Buffs     []*PowerUp
+	CPattern  uint32
+	MPattern  []Movement
 	Speed     int32
 	CurrentHP uint16
 	MaxHP     uint16
-
 	CurrentST uint16
 	MaxST     uint16
 }
@@ -98,14 +102,15 @@ func Facing() Vector2d {
 	off := Vector2d{0, 0}
 	switch PC.Solid.Anim.Action {
 	case MAN_WALK_BACK:
-		off = Vector2d{0, -1}
+		off = F_UP
 	case MAN_WALK_FRONT:
-		off = Vector2d{0, 1}
+		off = F_DOWN
 	case MAN_WALK_LEFT:
-		off = Vector2d{-1, 0}
+		off = F_LEFT
 	case MAN_WALK_RIGHT:
-		off = Vector2d{1, 0}
+		off = F_RIGHT
 	}
+
 	return off
 }
 
@@ -137,6 +142,12 @@ var (
 	WOMAN               = &sdl.Rect{0, 128, tSz, tSz}
 	BF_ATK_UP           = &sdl.Rect{72, 24, 24, 24}
 	BF_DEF_UP           = &sdl.Rect{96, 24, 24, 24}
+
+	// FACING ORIENTATION
+	F_LEFT  Vector2d = Vector2d{-1, 0}
+	F_RIGHT          = Vector2d{1, 0}
+	F_UP             = Vector2d{0, -1}
+	F_DOWN           = Vector2d{0, 1}
 
 	// MAIN CHAR POSES AND ANIMATIONS
 	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
@@ -449,12 +460,18 @@ func (s *Scene) populate(population int) {
 						PoseTick: 16,
 					},
 				},
-				Buffs:     []*PowerUp{ATK_UP, DEF_UP},
 				Speed:     1,
 				CurrentHP: 220,
 				MaxHP:     250,
 				CurrentST: 65,
 				MaxST:     100,
+				CPattern:  0,
+				MPattern: []Movement{
+					Movement{F_DOWN, 50},
+					Movement{F_UP, 90},
+					Movement{F_RIGHT, 10},
+					Movement{F_LEFT, 10},
+				},
 			}
 			Monsters = append(Monsters, &mon)
 			break
@@ -494,6 +511,35 @@ func (s *Scene) update() {
 			animObj.PoseTick = 16
 		}
 	}
+
+	// updating AI
+	for _, m := range Monsters {
+		if !inScreen(worldToScreen(m.Solid.Position, Cam)) {
+			continue
+		}
+
+		anon := func(c uint32, mvs []Movement) *Movement {
+			var sum uint32 = 0
+			for _, mp := range mvs {
+				sum += uint32(mp.Ticks)
+				if sum > m.CPattern {
+					return &mp
+				}
+			}
+			m.CPattern = 0
+			return nil
+		}
+		mov := anon(m.CPattern, m.MPattern)
+		if mov != nil {
+			applyMov(m.Solid.Position, mov.Orientation, m.Speed)
+			m.CPattern += uint32(m.Speed)
+		}
+	}
+}
+
+func applyMov(p *sdl.Rect, o Vector2d, s int32) {
+	p.X += o.X * s
+	p.Y += o.Y * s
 }
 
 func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
