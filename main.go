@@ -127,6 +127,7 @@ var (
 	particlesTxt   *sdl.Texture = nil
 	powerupsTxt    *sdl.Texture = nil
 	glowTxt        *sdl.Texture = nil
+	slimeTxt       *sdl.Texture = nil
 
 	GRASS     *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
 	TREE                = &sdl.Rect{0, 32, tSz, tSz}
@@ -155,13 +156,6 @@ var (
 	MAN_WALK_LEFT  [8]*sdl.Rect = [8]*sdl.Rect{MAN_LEFT_N, MAN_LEFT_R, MAN_LEFT_N, MAN_LEFT_L}
 	MAN_WALK_RIGHT [8]*sdl.Rect = [8]*sdl.Rect{MAN_RIGHT_N, MAN_RIGHT_R, MAN_RIGHT_N, MAN_RIGHT_L}
 	MAN_WALK_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_BACK_N, MAN_BACK_R, MAN_BACK_N, MAN_BACK_L}
-
-	EXPLOSION_S1 *sdl.Rect = &sdl.Rect{128, 0, tSz, tSz}
-	EXPLOSION_S2 *sdl.Rect = &sdl.Rect{128, 32, tSz, tSz}
-	EXPLOSION_S3 *sdl.Rect = &sdl.Rect{128, 64, tSz, tSz}
-	EXPLOSION_S4 *sdl.Rect = &sdl.Rect{128, 96, tSz, tSz}
-
-	EXPLOSION_A [8]*sdl.Rect = [8]*sdl.Rect{EXPLOSION_S1, EXPLOSION_S2, EXPLOSION_S3, EXPLOSION_S4}
 
 	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, tSz, tSz}
 	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, tSz, tSz}
@@ -247,6 +241,7 @@ var (
 	scene       *Scene
 	World       [][]*sdl.Rect
 	Interactive []*Solid
+	Monsters    []*Char
 	GUI         []*sdl.Rect
 	CullMap     []*Solid
 )
@@ -406,9 +401,13 @@ func (s *Scene) populate(population int) {
 		switch obj_type {
 		case 1:
 			sol = &Solid{
-				Position:  absolute_pos,
-				Txt:       s.TileSet,
-				Anim:      LAVA_ANIM,
+				Position: absolute_pos,
+				Txt:      s.TileSet,
+				Anim: &Animation{
+					Action:   LAVA_A,
+					Pose:     0,
+					PoseTick: 32,
+				},
 				Handlers:  LAVA_HANDLERS,
 				Collision: 0,
 			}
@@ -437,6 +436,27 @@ func (s *Scene) populate(population int) {
 				Collision: 0,
 			}
 			Interactive = append(Interactive, sol)
+			break
+		case 4:
+			mon := Char{
+				Solid: &Solid{
+					Position:  absolute_pos,
+					Txt:       slimeTxt,
+					Collision: 1,
+					Anim: &Animation{
+						Action:   MAN_WALK_FRONT,
+						Pose:     0,
+						PoseTick: 16,
+					},
+				},
+				Buffs:     []*PowerUp{ATK_UP, DEF_UP},
+				Speed:     1,
+				CurrentHP: 220,
+				MaxHP:     250,
+				CurrentST: 65,
+				MaxST:     100,
+			}
+			Monsters = append(Monsters, &mon)
 			break
 		}
 	}
@@ -526,7 +546,7 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 	for _, obj := range Interactive {
 		scrPos := worldToScreen(obj.Position, Cam)
 
-		if inScreen(R2Vo(scrPos)) {
+		if inScreen(scrPos) {
 
 			var src *sdl.Rect
 			if obj.Anim != nil {
@@ -536,8 +556,8 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 			}
 			renderer.Copy(obj.Txt, src, scrPos)
 
-			renderer.SetDrawColor(0, 255, 0, 255)
-			renderer.DrawRect(scrPos)
+			//renderer.SetDrawColor(0, 255, 0, 255)
+			//renderer.DrawRect(scrPos)
 
 			CullMap = append(CullMap, &Solid{
 				Position:  obj.Position,
@@ -545,6 +565,30 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 				Collision: obj.Collision,
 				Anim:      obj.Anim,
 				Handlers:  obj.Handlers,
+			})
+		}
+	}
+}
+
+func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
+
+	renderer.SetDrawColor(0, 255, 0, 255)
+
+	for _, mon := range Monsters {
+		scrPos := worldToScreen(mon.Solid.Position, Cam)
+
+		if inScreen(scrPos) {
+
+			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
+			renderer.Copy(mon.Solid.Txt, src, scrPos)
+			renderer.DrawRect(scrPos)
+
+			CullMap = append(CullMap, &Solid{
+				Position:  mon.Solid.Position,
+				Source:    src,
+				Collision: mon.Solid.Collision,
+				Anim:      mon.Solid.Anim,
+				Handlers:  mon.Solid.Handlers,
 			})
 		}
 	}
@@ -584,6 +628,7 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 
 	s._terrainRender(renderer)
 	s._solidsRender(renderer)
+	s._monstersRender(renderer)
 
 	// Rendering the PC
 	scrPos := worldToScreen(PC.Solid.Position, Cam)
@@ -608,9 +653,9 @@ func worldToScreen(pos *sdl.Rect, cam Camera) *sdl.Rect {
 	}
 }
 
-func inScreen(p Vector2d) bool {
-	return (p.X > (tSz*-1) && p.X < winWidth &&
-		p.Y > (tSz*-1) && p.Y < winHeight)
+func inScreen(r *sdl.Rect) bool {
+	return (r.X > (r.W*-1) && r.X < winWidth &&
+		r.Y > (r.H*-1) && r.Y < winHeight)
 }
 
 func depletHP(dmg uint16) {
@@ -663,6 +708,12 @@ func main() {
 	glowTxt, _ = renderer.CreateTextureFromSurface(glowImg)
 	defer glowTxt.Destroy()
 
+	slimeImg, _ := img.Load("assets/textures/slimes.png")
+	defer slimeImg.Free()
+
+	slimeTxt, _ = renderer.CreateTextureFromSurface(slimeImg)
+	defer slimeTxt.Destroy()
+
 	var running bool = true
 
 	for _, scn := range SCENES {
@@ -681,7 +732,7 @@ func main() {
 
 		println((time.Since(then)) / time.Microsecond)
 		running = catchEvents()
-		sdl.Delay(12)
+		sdl.Delay(16)
 	}
 }
 
