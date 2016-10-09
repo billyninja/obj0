@@ -23,6 +23,7 @@ const (
 	KEY_ARROW_RIGHT           = 1073741903
 	KEY_LEFT_SHIT             = 1073742049
 	KEY_SPACE_BAR             = 1073741824 // 32
+	KEY_C                     = 99
 )
 
 type Vector2d struct {
@@ -53,6 +54,7 @@ type InteractionHandlers struct {
 	OnCollDmg   uint16
 	OnCollPush  *Vector2d
 	OnCollEvent Event
+	OnPickUp    Event
 	OnActDmg    uint16
 	OnActPush   *Vector2d
 	OnActEvent  Event
@@ -67,6 +69,10 @@ type Solid struct {
 	Handlers  *InteractionHandlers
 	Txt       *sdl.Texture
 	Collision uint8
+	// AI RELATED
+	CPattern uint32
+	MPattern []Movement
+	Chase    *Solid
 }
 
 type Animation struct {
@@ -91,11 +97,6 @@ type PowerUp struct {
 type Char struct {
 	Solid *Solid
 	Buffs []*PowerUp
-
-	// AI RELATED
-	CPattern uint32
-	MPattern []Movement
-	Chase    *Solid
 
 	Speed     int32
 	CurrentHP uint16
@@ -177,6 +178,13 @@ var (
 	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, tSz * 2, tSz * 2}
 
 	YGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{YGLOW_S1, YGLOW_S2, YGLOW_S3, YGLOW_S2}
+
+	BGLOW_S1 *sdl.Rect = &sdl.Rect{224, 224, tSz, tSz}
+	BGLOW_S2 *sdl.Rect = &sdl.Rect{256, 224, tSz, tSz}
+	BGLOW_S3 *sdl.Rect = &sdl.Rect{288, 224, tSz, tSz}
+	BGLOW_S4 *sdl.Rect = &sdl.Rect{320, 224, tSz, tSz}
+
+	BGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{BGLOW_S1, BGLOW_S2, BGLOW_S3, BGLOW_S4, BGLOW_S3, BGLOW_S2}
 
 	LAVA_ANIM = &Animation{
 		Action:   LAVA_A,
@@ -289,6 +297,32 @@ func actProc() {
 	}
 }
 
+func onColHdk(o *Solid) {
+	o.Destroy()
+}
+
+func (c *Char) peformHaduken() {
+	r := ActHitBox(c.Solid.Position, c.Solid.Facing.Orientation)
+	h := &Solid{
+		Position: r,
+		Txt:      glowTxt,
+		Anim: &Animation{
+			Action:   BGLOW_A,
+			Pose:     0,
+			PoseTick: 16,
+		},
+		Handlers: &InteractionHandlers{
+			OnCollDmg:   12,
+			OnCollEvent: onColHdk,
+		},
+		CPattern: 0,
+		MPattern: []Movement{
+			Movement{F_DOWN, 255},
+		},
+	}
+	Interactive = append(Interactive, h)
+}
+
 func handleKeyEvent(key sdl.Keycode) {
 	np := &sdl.Rect{
 		PC.Solid.Position.X,
@@ -298,6 +332,9 @@ func handleKeyEvent(key sdl.Keycode) {
 	}
 
 	switch key {
+	case KEY_C:
+		PC.peformHaduken()
+		return
 	case KEY_SPACE_BAR:
 		actProc()
 		return
@@ -370,8 +407,8 @@ func catchEvents() bool {
 		case *sdl.QuitEvent:
 			return false
 		case *sdl.KeyDownEvent:
-			println(t.Keysym.Sym)
 			handleKeyEvent(t.Keysym.Sym)
+			println(t.Keysym.Sym)
 		}
 	}
 	return true
@@ -464,6 +501,9 @@ func (s *Scene) populate(population int) {
 				Txt:       glowTxt,
 				Anim:      LIFE_ORB_ANIM,
 				Collision: 0,
+				Handlers: &InteractionHandlers{
+					OnCollEvent: pickUp,
+				},
 			}
 			Interactive = append(Interactive, sol)
 			break
@@ -479,20 +519,23 @@ func (s *Scene) populate(population int) {
 						Pose:     0,
 						PoseTick: 16,
 					},
+					Handlers: &InteractionHandlers{
+						OnCollDmg: 12,
+					},
+					CPattern: 0,
+					MPattern: []Movement{
+						Movement{F_DOWN, 50},
+						Movement{F_UP, 90},
+						Movement{F_RIGHT, 10},
+						Movement{F_LEFT, 10},
+					},
+					Chase: PC.Solid,
 				},
 				Speed:     1,
 				CurrentHP: 220,
 				MaxHP:     250,
 				CurrentST: 65,
 				MaxST:     100,
-				CPattern:  0,
-				MPattern: []Movement{
-					Movement{F_DOWN, 50},
-					Movement{F_UP, 90},
-					Movement{F_RIGHT, 10},
-					Movement{F_LEFT, 10},
-				},
-				Chase: PC.Solid,
 			}
 			Monsters = append(Monsters, &mon)
 			break
@@ -508,101 +551,103 @@ var (
 
 func (s *Scene) update() {
 	EventTick -= 1
-	if EventTick == 0 {
-		for _, obj := range CullMap {
-			if obj.Handlers == nil {
-				continue
+	AiTick -= 1
+
+	for _, cObj := range CullMap {
+
+		if cObj.Anim != nil {
+			// update Interactives poses
+			animObj := cObj.Anim
+			animObj.PoseTick -= 1
+			if animObj.PoseTick == 0 {
+				animObj.Pose = getNextPose(animObj.Action, animObj.Pose)
+				animObj.PoseTick = 16
 			}
+		}
+
+		if cObj.Handlers != nil && EventTick == 0 {
 			fr := feetRect(PC.Solid.Position)
-			if checkCol(fr, obj.Position) {
-				if obj.Handlers.OnCollDmg != 0 {
-					depletHP(obj.Handlers.OnCollDmg)
+			if checkCol(fr, cObj.Position) {
+				if cObj.Handlers.OnCollDmg != 0 {
+					depletHP(cObj.Handlers.OnCollDmg)
+				}
+				if cObj.Handlers.OnCollEvent != nil {
+					cObj.Handlers.OnCollEvent(cObj)
 				}
 			}
 		}
-		//PC.Speed = 1
+
+		if AiTick == 0 {
+			if cObj.Chase != nil {
+				cObj.chase()
+			} else {
+				cObj.performPattern(1)
+			}
+		}
+	}
+	if EventTick == 0 {
 		EventTick = 16
 	}
-
-	// update Interactives poses
-	for _, cObj := range CullMap {
-		if cObj.Anim == nil {
-			continue
-		}
-		animObj := cObj.Anim
-		animObj.PoseTick -= 1
-		if animObj.PoseTick == 0 {
-			animObj.Pose = getNextPose(animObj.Action, animObj.Pose)
-			animObj.PoseTick = 16
-		}
-	}
-
-	// updating AI
-	AiTick -= 1
 	if AiTick == 0 {
-		for _, m := range Monsters {
-			if !inScreen(worldToScreen(m.Solid.Position, Cam)) {
-				continue
-			}
-			if m.Chase != nil {
-				m.chase()
-			} else {
-				m.performPattern()
-			}
-
-		} // END FOR
 		AiTick = 3
 	}
 }
 
-func (c *Char) chase() {
+func (s *Solid) chase() {
 
 	// TODO - LINE OF SIGHT CHECK
-	if c.Chase.Position.X > c.Solid.Position.X {
-		c.Solid.Position.X += 1
+	if s.Chase.Position.X > s.Position.X {
+		s.Position.X += 1
 		return
 	}
 
-	if c.Chase.Position.X < c.Solid.Position.X {
-		c.Solid.Position.X -= 1
+	if s.Chase.Position.X < s.Position.X {
+		s.Position.X -= 1
 		return
 	}
 
-	if c.Chase.Position.Y < c.Solid.Position.Y {
-		c.Solid.Position.Y -= 1
+	if s.Chase.Position.Y < s.Position.Y {
+		s.Position.Y -= 1
 		return
 	}
 
-	if c.Chase.Position.Y > c.Solid.Position.Y {
-		c.Solid.Position.Y += 1
+	if s.Chase.Position.Y > s.Position.Y {
+		s.Position.Y += 1
 		return
 	}
 
 	return
 }
 
-func (ch *Char) performPattern() {
+func (s *Solid) performPattern(sp int32) {
 	anon := func(c uint32, mvs []Movement) *Movement {
 		var sum uint32 = 0
 		for _, mp := range mvs {
 			sum += uint32(mp.Ticks)
-			if sum > ch.CPattern {
+			if sum > s.CPattern {
 				return &mp
 			}
 		}
-		ch.CPattern = 0
+		s.CPattern = 0
 		return nil
 	}
 
-	mov := anon(ch.CPattern, ch.MPattern)
+	mov := anon(s.CPattern, s.MPattern)
 	if mov != nil {
-		applyMov(ch.Solid.Position, mov.Orientation, ch.Speed)
-		ch.CPattern += uint32(ch.Speed)
-		_, na := GetFacing(&ch.Solid.Facing, mov.Orientation)
-		if na != ch.Solid.Anim.Action {
-			ch.Solid.Anim.Action = na
+		applyMov(s.Position, mov.Orientation, sp)
+		s.CPattern += uint32(sp)
+		_, na := GetFacing(&s.Facing, mov.Orientation)
+		if na != s.Anim.Action {
+			s.Anim.Action = na
 		}
 	}
+}
+
+func pickUp(s *Solid) {
+	if s.Handlers.OnPickUp != nil {
+		s.Handlers.OnPickUp(s)
+	}
+	s.Destroy()
 }
 
 func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
@@ -675,10 +720,25 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 	}
 }
 
+func (s *Solid) Destroy() {
+
+	s.Position = nil
+	s.Source = nil
+	s.Facing = Facing{}
+	s.Anim = nil
+	s.Handlers = nil
+	s.Txt = nil
+	s.Collision = 4
+}
+
 func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 	CullMap = []*Solid{}
 
 	for _, obj := range Interactive {
+		if obj.Position == nil {
+			continue
+		}
+
 		scrPos := worldToScreen(obj.Position, Cam)
 
 		if inScreen(scrPos) {
@@ -694,13 +754,7 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 			//renderer.SetDrawColor(0, 255, 0, 255)
 			//renderer.DrawRect(scrPos)
 
-			CullMap = append(CullMap, &Solid{
-				Position:  obj.Position,
-				Source:    src,
-				Collision: obj.Collision,
-				Anim:      obj.Anim,
-				Handlers:  obj.Handlers,
-			})
+			CullMap = append(CullMap, obj)
 		}
 	}
 }
@@ -713,18 +767,10 @@ func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 		scrPos := worldToScreen(mon.Solid.Position, Cam)
 
 		if inScreen(scrPos) {
-
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
 			renderer.Copy(mon.Solid.Txt, src, scrPos)
 			renderer.DrawRect(scrPos)
-
-			CullMap = append(CullMap, &Solid{
-				Position:  mon.Solid.Position,
-				Source:    src,
-				Collision: mon.Solid.Collision,
-				Anim:      mon.Solid.Anim,
-				Handlers:  mon.Solid.Handlers,
-			})
+			CullMap = append(CullMap, mon.Solid)
 		}
 	}
 }
@@ -798,7 +844,7 @@ func depletHP(dmg uint16) {
 		PC.CurrentHP = 0
 	} else {
 		PC.CurrentHP -= dmg
-		PC.PushBack(12)
+		PC.PushBack(24)
 	}
 }
 
