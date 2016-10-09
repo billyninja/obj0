@@ -89,10 +89,14 @@ type PowerUp struct {
 }
 
 type Char struct {
-	Solid     *Solid
-	Buffs     []*PowerUp
-	CPattern  uint32
-	MPattern  []Movement
+	Solid *Solid
+	Buffs []*PowerUp
+
+	// AI RELATED
+	CPattern uint32
+	MPattern []Movement
+	Chase    *Solid
+
 	Speed     int32
 	CurrentHP uint16
 	MaxHP     uint16
@@ -488,6 +492,7 @@ func (s *Scene) populate(population int) {
 					Movement{F_RIGHT, 10},
 					Movement{F_LEFT, 10},
 				},
+				Chase: PC.Solid,
 			}
 			Monsters = append(Monsters, &mon)
 			break
@@ -539,31 +544,64 @@ func (s *Scene) update() {
 			if !inScreen(worldToScreen(m.Solid.Position, Cam)) {
 				continue
 			}
-
-			anon := func(c uint32, mvs []Movement) *Movement {
-				var sum uint32 = 0
-				for _, mp := range mvs {
-					sum += uint32(mp.Ticks)
-					if sum > m.CPattern {
-						return &mp
-					}
-				}
-				m.CPattern = 0
-				return nil
+			if m.Chase != nil {
+				m.chase()
+			} else {
+				m.performPattern()
 			}
-			mov := anon(m.CPattern, m.MPattern)
-			if mov != nil {
-				applyMov(m.Solid.Position, mov.Orientation, m.Speed)
-				m.CPattern += uint32(m.Speed)
-				_, na := GetFacing(&m.Solid.Facing, mov.Orientation)
-				if na != m.Solid.Anim.Action {
-					m.Solid.Anim.Action = na
-					continue
-				}
 
+		} // END FOR
+		AiTick = 3
+	}
+}
+
+func (c *Char) chase() {
+
+	// TODO - LINE OF SIGHT CHECK
+	if c.Chase.Position.X > c.Solid.Position.X {
+		c.Solid.Position.X += 1
+		return
+	}
+
+	if c.Chase.Position.X < c.Solid.Position.X {
+		c.Solid.Position.X -= 1
+		return
+	}
+
+	if c.Chase.Position.Y < c.Solid.Position.Y {
+		c.Solid.Position.Y -= 1
+		return
+	}
+
+	if c.Chase.Position.Y > c.Solid.Position.Y {
+		c.Solid.Position.Y += 1
+		return
+	}
+
+	return
+}
+
+func (ch *Char) performPattern() {
+	anon := func(c uint32, mvs []Movement) *Movement {
+		var sum uint32 = 0
+		for _, mp := range mvs {
+			sum += uint32(mp.Ticks)
+			if sum > ch.CPattern {
+				return &mp
 			}
 		}
-		AiTick = 3
+		ch.CPattern = 0
+		return nil
+	}
+
+	mov := anon(ch.CPattern, ch.MPattern)
+	if mov != nil {
+		applyMov(ch.Solid.Position, mov.Orientation, ch.Speed)
+		ch.CPattern += uint32(ch.Speed)
+		_, na := GetFacing(&ch.Solid.Facing, mov.Orientation)
+		if na != ch.Solid.Anim.Action {
+			ch.Solid.Anim.Action = na
+		}
 	}
 }
 
