@@ -111,6 +111,10 @@ type Facing struct {
 	Down        [8]*sdl.Rect
 	Left        [8]*sdl.Rect
 	Right       [8]*sdl.Rect
+	DownLeft    [8]*sdl.Rect
+	DownRight   [8]*sdl.Rect
+	UpLeft      [8]*sdl.Rect
+	UpRight     [8]*sdl.Rect
 }
 
 func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
@@ -147,6 +151,10 @@ var (
 	F_RIGHT          = Vector2d{1, 0}
 	F_UP             = Vector2d{0, -1}
 	F_DOWN           = Vector2d{0, 1}
+	F_DL             = Vector2d{-1, 1}
+	F_DR             = Vector2d{1, 1}
+	F_UL             = Vector2d{-1, -1}
+	F_UR             = Vector2d{1, -1}
 
 	// MAIN CHAR POSES AND ANIMATIONS
 	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
@@ -161,6 +169,24 @@ var (
 	MAN_BACK_R  *sdl.Rect = &sdl.Rect{0, 96, tSz, tSz}
 	MAN_BACK_N  *sdl.Rect = &sdl.Rect{32, 96, tSz, tSz}
 	MAN_BACK_L  *sdl.Rect = &sdl.Rect{64, 96, tSz, tSz}
+
+	MAN_UL_R *sdl.Rect = &sdl.Rect{96, 32, tSz, tSz}
+	MAN_UL_N *sdl.Rect = &sdl.Rect{128, 32, tSz, tSz}
+	MAN_UL_L *sdl.Rect = &sdl.Rect{160, 32, tSz, tSz}
+	MAN_UR_R *sdl.Rect = &sdl.Rect{96, 96, tSz, tSz}
+	MAN_UR_N *sdl.Rect = &sdl.Rect{128, 96, tSz, tSz}
+	MAN_UR_L *sdl.Rect = &sdl.Rect{160, 96, tSz, tSz}
+	MAN_DL_R *sdl.Rect = &sdl.Rect{96, 0, tSz, tSz}
+	MAN_DL_N *sdl.Rect = &sdl.Rect{128, 0, tSz, tSz}
+	MAN_DL_L *sdl.Rect = &sdl.Rect{160, 0, tSz, tSz}
+	MAN_DR_R *sdl.Rect = &sdl.Rect{96, 64, tSz, tSz}
+	MAN_DR_N *sdl.Rect = &sdl.Rect{128, 64, tSz, tSz}
+	MAN_DR_L *sdl.Rect = &sdl.Rect{160, 64, tSz, tSz}
+
+	MAN_WALK_DL [8]*sdl.Rect = [8]*sdl.Rect{MAN_DL_N, MAN_DL_L, MAN_DL_N, MAN_DL_R}
+	MAN_WALK_DR [8]*sdl.Rect = [8]*sdl.Rect{MAN_DR_N, MAN_DR_L, MAN_DR_N, MAN_DR_R}
+	MAN_WALK_UL [8]*sdl.Rect = [8]*sdl.Rect{MAN_UL_N, MAN_UL_L, MAN_UL_N, MAN_UL_R}
+	MAN_WALK_UR [8]*sdl.Rect = [8]*sdl.Rect{MAN_UR_N, MAN_UR_L, MAN_UR_N, MAN_UR_R}
 
 	MAN_WALK_FRONT [8]*sdl.Rect = [8]*sdl.Rect{MAN_FRONT_N, MAN_FRONT_R, MAN_FRONT_N, MAN_FRONT_L}
 	MAN_WALK_LEFT  [8]*sdl.Rect = [8]*sdl.Rect{MAN_LEFT_N, MAN_LEFT_R, MAN_LEFT_N, MAN_LEFT_L}
@@ -199,10 +225,14 @@ var (
 	}
 
 	DEFAULT_FACING = Facing{
-		Up:    MAN_WALK_BACK,
-		Down:  MAN_WALK_FRONT,
-		Left:  MAN_WALK_LEFT,
-		Right: MAN_WALK_RIGHT,
+		Up:        MAN_WALK_BACK,
+		Down:      MAN_WALK_FRONT,
+		Left:      MAN_WALK_LEFT,
+		Right:     MAN_WALK_RIGHT,
+		DownLeft:  MAN_WALK_DL,
+		DownRight: MAN_WALK_DR,
+		UpLeft:    MAN_WALK_UL,
+		UpRight:   MAN_WALK_UR,
 	}
 
 	LAVA_HANDLERS = &InteractionHandlers{
@@ -317,54 +347,57 @@ func (c *Char) peformHaduken() {
 		},
 		CPattern: 0,
 		MPattern: []Movement{
-			Movement{F_DOWN, 255},
+			Movement{c.Solid.Facing.Orientation, 255},
 		},
 	}
 	Interactive = append(Interactive, h)
 }
 
-func handleKeyEvent(key sdl.Keycode) {
-	np := &sdl.Rect{
-		PC.Solid.Position.X,
-		PC.Solid.Position.Y,
-		PC.Solid.Position.W,
-		PC.Solid.Position.H,
-	}
-
+func handleKeyEvent(key sdl.Keycode) Vector2d {
+	N := Vector2d{0, 0}
 	switch key {
 	case KEY_C:
 		PC.peformHaduken()
-		return
+		return N
 	case KEY_SPACE_BAR:
 		actProc()
-		return
+		return N
 	case KEY_LEFT_SHIT:
 		PC.Speed = 3
-		np.Y -= PC.Speed
 	case KEY_ARROW_UP:
-		PC.Solid.Anim.Action = PC.Solid.Facing.Up
-		PC.Solid.Facing.Orientation = F_UP
-		np.Y -= PC.Speed
+		return F_UP
 	case KEY_ARROW_DOWN:
-		PC.Solid.Anim.Action = PC.Solid.Facing.Down
-		PC.Solid.Facing.Orientation = F_DOWN
-		np.Y += PC.Speed
+		return F_DOWN
 	case KEY_ARROW_LEFT:
-		PC.Solid.Anim.Action = PC.Solid.Facing.Left
-		PC.Solid.Facing.Orientation = F_LEFT
-		np.X -= PC.Speed
+		return F_LEFT
 	case KEY_ARROW_RIGHT:
-		PC.Solid.Anim.Action = PC.Solid.Facing.Right
-		PC.Solid.Facing.Orientation = F_RIGHT
-		np.X += PC.Speed
+		return F_RIGHT
 	}
+	return N
+}
 
-	// TODO CLEAN THIS UP
+func handleKeyUpEvent(key sdl.Keycode) {
+	switch key {
+	case KEY_LEFT_SHIT:
+		PC.Speed = 1
+		break
+	}
+}
+
+func (s *Solid) procMovement(vel Vector2d) {
+
+	np := &sdl.Rect{
+		s.Position.X + vel.X,
+		s.Position.Y + vel.Y,
+		s.Position.W,
+		s.Position.H,
+	}
+	// TODO - CLEAN THIS UP
 	var outbound bool = (np.X <= 0 || np.Y <= 0 ||
 		np.X > int32(len(World)*tSz) || np.Y > int32(len(World[0])*tSz))
 
-	if np.X == PC.Solid.Position.X && np.Y == PC.Solid.Position.Y || outbound {
-		PC.Solid.Anim.Pose = 0
+	if np.X == s.Position.X && np.Y == s.Position.Y || outbound {
+		s.Anim.Pose = 0
 		return
 	}
 
@@ -392,25 +425,40 @@ func handleKeyEvent(key sdl.Keycode) {
 		Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
 	}
 
-	PC.Solid.Position = np
+	_, act := GetFacing(&s.Facing, vel)
+	s.Anim.Action = act
 
-	PC.Solid.Anim.PoseTick -= 1
-	if PC.Solid.Anim.PoseTick == 0 {
-		PC.Solid.Anim.Pose = getNextPose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
-		PC.Solid.Anim.PoseTick = 16
+	s.Position = np
+	s.Anim.PoseTick -= 1
+	if s.Anim.PoseTick == 0 {
+		s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
+		s.Anim.PoseTick = 24
 	}
 }
 
 func catchEvents() bool {
+	vel := Vector2d{0, 0}
+
+	c := 0
 	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
 			return false
 		case *sdl.KeyDownEvent:
-			handleKeyEvent(t.Keysym.Sym)
-			println(t.Keysym.Sym)
+			c++
+			v := handleKeyEvent(t.Keysym.Sym)
+			vel.X += v.X
+			vel.Y += v.Y
+		case *sdl.KeyUpEvent:
+			handleKeyUpEvent(t.Keysym.Sym)
 		}
 	}
+	println(c)
+	if vel.X != 0 && vel.Y != 0 {
+		println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+	}
+	PC.Solid.procMovement(vel)
+
 	return true
 }
 
@@ -578,10 +626,10 @@ func (s *Scene) update() {
 		}
 
 		if AiTick == 0 {
-			if cObj.Chase != nil {
+			if cObj.Chase != nil && cObj.LoSCheck(32) {
 				cObj.chase()
 			} else {
-				cObj.performPattern(1)
+				cObj.peformPattern(1)
 			}
 		}
 	}
@@ -593,33 +641,51 @@ func (s *Scene) update() {
 	}
 }
 
-func (s *Solid) chase() {
+func (s *Solid) LoSCheck(int32) bool {
+	LoS := &sdl.Rect{s.Position.X - 128, s.Position.Y - 128, s.Position.W + 256, s.Position.H + 256}
+	if !checkCol(PC.Solid.Position, LoS) {
+		return false
+	}
+	return true
+}
 
+func (s *Solid) chase() {
 	// TODO - LINE OF SIGHT CHECK
+	new_pos := &sdl.Rect{s.Position.X, s.Position.Y, s.Position.W, s.Position.H}
+
 	if s.Chase.Position.X > s.Position.X {
-		s.Position.X += 1
-		return
+		new_pos.X += 1
 	}
 
 	if s.Chase.Position.X < s.Position.X {
-		s.Position.X -= 1
-		return
+		new_pos.X -= 1
 	}
 
 	if s.Chase.Position.Y < s.Position.Y {
-		s.Position.Y -= 1
-		return
+		new_pos.Y -= 1
 	}
 
 	if s.Chase.Position.Y > s.Position.Y {
-		s.Position.Y += 1
-		return
+		new_pos.Y += 1
 	}
+
+	f := feetRect(new_pos)
+	for _, obj := range CullMap {
+		if obj.Position != nil && s != obj && checkCol(f, obj.Position) {
+			if obj.Handlers.OnCollEvent != nil {
+				obj.Handlers.OnCollEvent(obj)
+			}
+			if obj.Collision == 1 {
+				return
+			}
+		}
+	}
+	s.Position = new_pos
 
 	return
 }
 
-func (s *Solid) performPattern(sp int32) {
+func (s *Solid) peformPattern(sp int32) {
 	anon := func(c uint32, mvs []Movement) *Movement {
 		var sum uint32 = 0
 		for _, mp := range mvs {
@@ -636,9 +702,12 @@ func (s *Solid) performPattern(sp int32) {
 	if mov != nil {
 		applyMov(s.Position, mov.Orientation, sp)
 		s.CPattern += uint32(sp)
-		_, na := GetFacing(&s.Facing, mov.Orientation)
-		if na != s.Anim.Action {
-			s.Anim.Action = na
+
+		if s.Facing.Up[0] != nil {
+			_, na := GetFacing(&s.Facing, mov.Orientation)
+			if na != s.Anim.Action {
+				s.Anim.Action = na
+			}
 		}
 	}
 }
@@ -652,20 +721,28 @@ func pickUp(s *Solid) {
 
 func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
 
-	if o.X == -1 {
+	if o.X == -1 && o.Y == 0 {
 		return F_LEFT, f.Left
 	}
 
-	if o.X == 1 {
+	if o.X == 1 && o.Y == 0 {
 		return F_RIGHT, f.Right
 	}
 
-	if o.Y == 1 {
-		return F_DOWN, f.Down
+	if o.X == 1 && o.Y == 1 {
+		return F_DR, f.DownRight
 	}
 
-	if o.Y == -1 {
-		return F_UP, f.Up
+	if o.X == 1 && o.Y == -1 {
+		return F_UR, f.UpRight
+	}
+
+	if o.X == -1 && o.Y == 1 {
+		return F_DL, f.DownLeft
+	}
+
+	if o.X == -1 && o.Y == -1 {
+		return F_UL, f.UpLeft
 	}
 
 	return F_DOWN, f.Down
@@ -742,7 +819,6 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 		scrPos := worldToScreen(obj.Position, Cam)
 
 		if inScreen(scrPos) {
-
 			var src *sdl.Rect
 			if obj.Anim != nil {
 				src = obj.Anim.Action[obj.Anim.Pose]
@@ -753,7 +829,6 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 
 			//renderer.SetDrawColor(0, 255, 0, 255)
 			//renderer.DrawRect(scrPos)
-
 			CullMap = append(CullMap, obj)
 		}
 	}
