@@ -22,7 +22,7 @@ const (
 	KEY_ARROW_LEFT            = 1073741904
 	KEY_ARROW_RIGHT           = 1073741903
 	KEY_LEFT_SHIT             = 1073742049
-	KEY_SPACE_BAR             = 32
+	KEY_SPACE_BAR             = 1073741824 // 32
 )
 
 type Vector2d struct {
@@ -56,6 +56,7 @@ type InteractionHandlers struct {
 	OnActDmg    uint16
 	OnActPush   *Vector2d
 	OnActEvent  Event
+	DoorTo      *Scene
 }
 
 type Solid struct {
@@ -100,26 +101,11 @@ type Char struct {
 }
 
 type Facing struct {
-	Up    [8]*sdl.Rect
-	Down  [8]*sdl.Rect
-	Left  [8]*sdl.Rect
-	Right [8]*sdl.Rect
-}
-
-func SFacing() Vector2d {
-	off := Vector2d{0, 0}
-	switch PC.Solid.Anim.Action {
-	case MAN_WALK_BACK:
-		off = F_UP
-	case MAN_WALK_FRONT:
-		off = F_DOWN
-	case MAN_WALK_LEFT:
-		off = F_LEFT
-	case MAN_WALK_RIGHT:
-		off = F_RIGHT
-	}
-
-	return off
+	Orientation Vector2d
+	Up          [8]*sdl.Rect
+	Down        [8]*sdl.Rect
+	Left        [8]*sdl.Rect
+	Right       [8]*sdl.Rect
 }
 
 func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
@@ -222,25 +208,28 @@ var (
 		Ico:         BF_DEF_UP,
 	}
 
+	SCN_PLAINS *Scene = &Scene{
+		codename:   "plains",
+		CellsX:     50,
+		CellsY:     30,
+		CamPoint:   Vector2d{120, 120},
+		StartPoint: Vector2d{300, 200},
+		tileA:      GRASS,
+		tileB:      DIRT,
+	}
+	SCN_CAVE = &Scene{
+		codename:   "cave",
+		CellsX:     15,
+		CellsY:     20,
+		StartPoint: Vector2d{100, 100},
+		CamPoint:   Vector2d{0, 0},
+		tileA:      DIRT,
+		tileB:      LAVA_S1,
+	}
+
 	SCENES []*Scene = []*Scene{
-		&Scene{
-			codename:   "plains",
-			CellsX:     50,
-			CellsY:     30,
-			CamPoint:   Vector2d{120, 120},
-			StartPoint: Vector2d{300, 200},
-			tileA:      GRASS,
-			tileB:      DIRT,
-		},
-		&Scene{
-			codename:   "cave",
-			CellsX:     15,
-			CellsY:     20,
-			StartPoint: Vector2d{100, 100},
-			CamPoint:   Vector2d{0, 0},
-			tileA:      DIRT,
-			tileB:      LAVA_S1,
-		},
+		SCN_PLAINS,
+		SCN_CAVE,
 	}
 
 	Cam = Camera{
@@ -250,6 +239,7 @@ var (
 
 	PC = Char{
 		Solid: &Solid{
+			Facing: DEFAULT_FACING,
 			Anim: &Animation{
 				Action:   MAN_WALK_FRONT,
 				Pose:     0,
@@ -280,7 +270,7 @@ func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 }
 
 func actProc() {
-	action_hit_box := ActHitBox(PC.Solid.Position, SFacing())
+	action_hit_box := ActHitBox(PC.Solid.Position, PC.Solid.Facing.Orientation)
 
 	// Debug hint
 	GUI = append(GUI, action_hit_box)
@@ -311,16 +301,20 @@ func handleKeyEvent(key sdl.Keycode) {
 		PC.Speed = 3
 		np.Y -= PC.Speed
 	case KEY_ARROW_UP:
-		PC.Solid.Anim.Action = MAN_WALK_BACK
+		PC.Solid.Anim.Action = PC.Solid.Facing.Up
+		PC.Solid.Facing.Orientation = F_UP
 		np.Y -= PC.Speed
 	case KEY_ARROW_DOWN:
-		PC.Solid.Anim.Action = MAN_WALK_FRONT
+		PC.Solid.Anim.Action = PC.Solid.Facing.Down
+		PC.Solid.Facing.Orientation = F_DOWN
 		np.Y += PC.Speed
 	case KEY_ARROW_LEFT:
-		PC.Solid.Anim.Action = MAN_WALK_LEFT
+		PC.Solid.Anim.Action = PC.Solid.Facing.Left
+		PC.Solid.Facing.Orientation = F_LEFT
 		np.X -= PC.Speed
 	case KEY_ARROW_RIGHT:
-		PC.Solid.Anim.Action = MAN_WALK_RIGHT
+		PC.Solid.Anim.Action = PC.Solid.Facing.Right
+		PC.Solid.Facing.Orientation = F_RIGHT
 		np.X += PC.Speed
 	}
 
@@ -372,6 +366,7 @@ func catchEvents() bool {
 		case *sdl.QuitEvent:
 			return false
 		case *sdl.KeyDownEvent:
+			println(t.Keysym.Sym)
 			handleKeyEvent(t.Keysym.Sym)
 		}
 	}
@@ -414,6 +409,10 @@ func (s *Scene) build() {
 }
 
 func (s *Scene) populate(population int) {
+	dt := SCN_PLAINS
+	if s.codename == "plains" {
+		dt = SCN_CAVE
+	}
 
 	for i := 0; i < population; i++ {
 
@@ -448,6 +447,7 @@ func (s *Scene) populate(population int) {
 				Collision: 1,
 				Handlers: &InteractionHandlers{
 					OnActEvent: BashDoor,
+					DoorTo:     dt,
 				},
 			}
 			Interactive = append(Interactive, sol)
@@ -498,6 +498,7 @@ func (s *Scene) populate(population int) {
 var (
 	EventTick uint8 = 16
 	AiTick          = 16
+	blinkTick       = 32
 )
 
 func (s *Scene) update() {
@@ -554,13 +555,10 @@ func (s *Scene) update() {
 			if mov != nil {
 				applyMov(m.Solid.Position, mov.Orientation, m.Speed)
 				m.CPattern += uint32(m.Speed)
-				na := GetFacing(&m.Solid.Facing, mov.Orientation)
-				if na == m.Solid.Anim.Action {
-					continue
-				} else {
+				_, na := GetFacing(&m.Solid.Facing, mov.Orientation)
+				if na != m.Solid.Anim.Action {
 					m.Solid.Anim.Action = na
-					//m.Solid.Anim.Pose = 0
-					//m.Solid.Anim.PoseTick = 0
+					continue
 				}
 
 			}
@@ -569,23 +567,25 @@ func (s *Scene) update() {
 	}
 }
 
-func GetFacing(f *Facing, o Vector2d) [8]*sdl.Rect {
+func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
+
 	if o.X == -1 {
-		return f.Left
+		return F_LEFT, f.Left
 	}
 
 	if o.X == 1 {
-		return f.Right
+		return F_RIGHT, f.Right
 	}
 
 	if o.Y == 1 {
-		return f.Down
+		return F_DOWN, f.Down
 	}
 
 	if o.Y == -1 {
-		return f.Up
+		return F_UP, f.Up
 	}
-	return f.Down
+
+	return F_DOWN, f.Down
 }
 
 func applyMov(p *sdl.Rect, o Vector2d, s int32) {
@@ -677,7 +677,7 @@ func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 		if inScreen(scrPos) {
 
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
-			renderer.Copy(spritesheetTxt, src, scrPos)
+			renderer.Copy(mon.Solid.Txt, src, scrPos)
 			renderer.DrawRect(scrPos)
 
 			CullMap = append(CullMap, &Solid{
@@ -760,11 +760,18 @@ func depletHP(dmg uint16) {
 		PC.CurrentHP = 0
 	} else {
 		PC.CurrentHP -= dmg
+		PC.PushBack(12)
 	}
 }
 
+func (c *Char) PushBack(d int32) {
+	f := c.Solid.Facing.Orientation
+	c.Solid.Position.X -= f.X * d
+	c.Solid.Position.Y -= f.Y * d
+}
+
 func BashDoor(obj *Solid) {
-	change_scene(SCENES[1], nil)
+	change_scene(obj.Handlers.DoorTo, nil)
 }
 
 func main() {
