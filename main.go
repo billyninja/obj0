@@ -62,6 +62,7 @@ type InteractionHandlers struct {
 }
 
 type Solid struct {
+	Velocity  *Vector2d
 	Position  *sdl.Rect
 	Source    *sdl.Rect
 	Facing    Facing
@@ -285,7 +286,7 @@ var (
 			Anim: &Animation{
 				Action:   MAN_WALK_FRONT,
 				Pose:     0,
-				PoseTick: 16,
+				PoseTick: 24,
 			},
 		},
 		Buffs:     []*PowerUp{ATK_UP, DEF_UP},
@@ -387,17 +388,18 @@ func handleKeyUpEvent(key sdl.Keycode) {
 func (s *Solid) procMovement(vel Vector2d) {
 
 	np := &sdl.Rect{
-		s.Position.X + vel.X,
-		s.Position.Y + vel.Y,
+		(s.Position.X + vel.X),
+		(s.Position.Y + vel.Y),
 		s.Position.W,
 		s.Position.H,
 	}
-	// TODO - CLEAN THIS UP
-	var outbound bool = (np.X <= 0 || np.Y <= 0 ||
-		np.X > int32(len(World)*tSz) || np.Y > int32(len(World[0])*tSz))
+
+	var outbound bool = (np.X <= 0 ||
+		np.Y <= 0 ||
+		np.X > int32(scene.CellsX*tSz) ||
+		np.Y > int32(scene.CellsY*tSz))
 
 	if np.X == s.Position.X && np.Y == s.Position.Y || outbound {
-		s.Anim.Pose = 0
 		return
 	}
 
@@ -432,7 +434,7 @@ func (s *Solid) procMovement(vel Vector2d) {
 	s.Anim.PoseTick -= 1
 	if s.Anim.PoseTick == 0 {
 		s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
-		s.Anim.PoseTick = 24
+		s.Anim.PoseTick = 8
 	}
 }
 
@@ -452,10 +454,6 @@ func catchEvents() bool {
 		case *sdl.KeyUpEvent:
 			handleKeyUpEvent(t.Keysym.Sym)
 		}
-	}
-	println(c)
-	if vel.X != 0 && vel.Y != 0 {
-		println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 	}
 	PC.Solid.procMovement(vel)
 
@@ -502,7 +500,7 @@ func (s *Scene) populate(population int) {
 	if s.codename == "plains" {
 		dt = SCN_CAVE
 	}
-
+	//population = 0
 	for i := 0; i < population; i++ {
 
 		cX := rand.Int31n(s.CellsX)
@@ -699,7 +697,7 @@ func (s *Solid) peformPattern(sp int32) {
 	}
 
 	mov := anon(s.CPattern, s.MPattern)
-	if mov != nil {
+	if mov != nil && s.Position != nil {
 		applyMov(s.Position, mov.Orientation, sp)
 		s.CPattern += uint32(sp)
 
@@ -720,6 +718,9 @@ func pickUp(s *Solid) {
 }
 
 func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
+	if o.X == 0 && o.Y == -1 {
+		return F_UP, f.Up
+	}
 
 	if o.X == -1 && o.Y == 0 {
 		return F_LEFT, f.Left
@@ -788,9 +789,9 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 			} else {
 				Source = gfx
 			}
-
+			if Source != nil && &screenPos != nil {
+			}
 			renderer.Copy(s.TileSet, Source, &screenPos)
-
 			// renderer.SetDrawColor(0, 0, 255, 255)
 			// renderer.DrawRect(&screenPos)
 		}
@@ -947,7 +948,7 @@ func main() {
 	renderer, _ = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	defer renderer.Destroy()
 
-	tilesetImg, _ := img.Load("assets/textures/ts1.png")
+	tilesetImg, _ := img.Load("assets/textures/ts1.bmp")
 	defer tilesetImg.Free()
 
 	tilesetTxt, _ = renderer.CreateTextureFromSurface(tilesetImg)
