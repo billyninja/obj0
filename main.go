@@ -117,11 +117,13 @@ type Facing struct {
 }
 
 func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
+	println(">", facing.X, facing.Y)
+
 	return &sdl.Rect{
 		source.X + (facing.X * tSz),
 		source.Y + (facing.Y * tSz),
-		tSz,
-		tSz,
+		source.W,
+		source.H,
 	}
 }
 
@@ -333,6 +335,7 @@ func onColHdk(o *Solid) {
 
 func (c *Char) peformHaduken() {
 	r := ActHitBox(c.Solid.Position, c.Solid.Facing.Orientation)
+	println(r.X, r.Y, "X", c.Solid.Position.X, c.Solid.Position.Y)
 	h := &Solid{
 		Position: r,
 		Txt:      glowTxt,
@@ -398,7 +401,6 @@ func (s *Solid) procMovement(speed int32) {
 		s.Position.W,
 		s.Position.H,
 	}
-
 	var outbound bool = (np.X <= 0 ||
 		np.Y <= 0 ||
 		np.X > int32(scene.CellsX*tSz) ||
@@ -431,6 +433,8 @@ func (s *Solid) procMovement(speed int32) {
 	if (winHeight - Cam.DZy) < (newScreenPos.Y + tSz) {
 		Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
 	}
+
+	s.Facing.Orientation = *s.Velocity
 	_, act := GetFacing(&s.Facing, *s.Velocity)
 	s.Anim.Action = act
 
@@ -445,17 +449,14 @@ func catchEvents() bool {
 			return false
 		case *sdl.KeyDownEvent:
 			v := handleKeyEvent(t.Keysym.Sym)
-
 			if v.X != 0 {
 				PC.Solid.Velocity.X = v.X
 				c = true
 			}
-
 			if v.Y != 0 {
 				PC.Solid.Velocity.Y = v.Y
 				c = true
 			}
-
 		case *sdl.KeyUpEvent:
 			handleKeyUpEvent(t.Keysym.Sym)
 		}
