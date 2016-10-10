@@ -1,13 +1,11 @@
 package main
 
 import (
-	//"fmt"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/sdl_image"
 	"math/rand"
 	"runtime"
 	"time"
-	//"os"
 )
 
 const (
@@ -282,7 +280,8 @@ var (
 
 	PC = Char{
 		Solid: &Solid{
-			Facing: DEFAULT_FACING,
+			Velocity: &Vector2d{0, 0},
+			Facing:   DEFAULT_FACING,
 			Anim: &Animation{
 				Action:   MAN_WALK_FRONT,
 				Pose:     0,
@@ -364,7 +363,7 @@ func handleKeyEvent(key sdl.Keycode) Vector2d {
 		actProc()
 		return N
 	case KEY_LEFT_SHIT:
-		PC.Speed = 3
+		PC.Speed = 2
 	case KEY_ARROW_UP:
 		return F_UP
 	case KEY_ARROW_DOWN:
@@ -381,15 +380,21 @@ func handleKeyUpEvent(key sdl.Keycode) {
 	switch key {
 	case KEY_LEFT_SHIT:
 		PC.Speed = 1
-		break
+	case KEY_ARROW_UP:
+		PC.Solid.Velocity.Y = 0
+	case KEY_ARROW_DOWN:
+		PC.Solid.Velocity.Y = 0
+	case KEY_ARROW_LEFT:
+		PC.Solid.Velocity.X = 0
+	case KEY_ARROW_RIGHT:
+		PC.Solid.Velocity.X = 0
 	}
 }
 
-func (s *Solid) procMovement(vel Vector2d) {
-
+func (s *Solid) procMovement(speed int32) {
 	np := &sdl.Rect{
-		(s.Position.X + vel.X),
-		(s.Position.Y + vel.Y),
+		(s.Position.X + (s.Velocity.X * speed)),
+		(s.Position.Y + (s.Velocity.Y * speed)),
 		s.Position.W,
 		s.Position.H,
 	}
@@ -399,7 +404,7 @@ func (s *Solid) procMovement(vel Vector2d) {
 		np.X > int32(scene.CellsX*tSz) ||
 		np.Y > int32(scene.CellsY*tSz))
 
-	if np.X == s.Position.X && np.Y == s.Position.Y || outbound {
+	if (np.X == s.Position.X && np.Y == s.Position.Y) || outbound {
 		return
 	}
 
@@ -426,36 +431,44 @@ func (s *Solid) procMovement(vel Vector2d) {
 	if (winHeight - Cam.DZy) < (newScreenPos.Y + tSz) {
 		Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
 	}
-
-	_, act := GetFacing(&s.Facing, vel)
+	_, act := GetFacing(&s.Facing, *s.Velocity)
 	s.Anim.Action = act
 
 	s.Position = np
-	s.Anim.PoseTick -= 1
-	if s.Anim.PoseTick == 0 {
-		s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
-		s.Anim.PoseTick = 8
-	}
 }
 
 func catchEvents() bool {
-	vel := Vector2d{0, 0}
-
-	c := 0
+	var c bool
 	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
 			return false
 		case *sdl.KeyDownEvent:
-			c++
 			v := handleKeyEvent(t.Keysym.Sym)
-			vel.X += v.X
-			vel.Y += v.Y
+
+			if v.X != 0 {
+				PC.Solid.Velocity.X = v.X
+				c = true
+			}
+
+			if v.Y != 0 {
+				PC.Solid.Velocity.Y = v.Y
+				c = true
+			}
+
 		case *sdl.KeyUpEvent:
 			handleKeyUpEvent(t.Keysym.Sym)
 		}
 	}
-	PC.Solid.procMovement(vel)
+
+	if c {
+		PC.Solid.procMovement(PC.Speed)
+		PC.Solid.Anim.PoseTick -= 1
+		if PC.Solid.Anim.PoseTick == 0 {
+			PC.Solid.Anim.Pose = getNextPose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
+			PC.Solid.Anim.PoseTick = 8
+		}
+	}
 
 	return true
 }
@@ -557,6 +570,7 @@ func (s *Scene) populate(population int) {
 			mon := Char{
 				Solid: &Solid{
 					Position:  absolute_pos,
+					Velocity:  &Vector2d{0, 0},
 					Txt:       slimeTxt,
 					Collision: 1,
 					Facing:    DEFAULT_FACING,
