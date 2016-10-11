@@ -46,7 +46,7 @@ type Camera struct {
 	DZy int32
 }
 
-type Event func(obj *Solid)
+type Event func(source *Solid, subject *Solid)
 
 type InteractionHandlers struct {
 	OnCollDmg   uint16
@@ -54,9 +54,10 @@ type InteractionHandlers struct {
 	OnCollEvent Event
 	OnPickUp    Event
 	OnActDmg    uint16
-	OnActPush   *Vector2d
-	OnActEvent  Event
-	DoorTo      *Scene
+
+	OnActPush  *Vector2d
+	OnActEvent Event
+	DoorTo     *Scene
 }
 
 type Solid struct {
@@ -72,6 +73,7 @@ type Solid struct {
 	CPattern uint32
 	MPattern []Movement
 	Chase    *Solid
+	CharPtr  *Char
 }
 
 type Animation struct {
@@ -117,8 +119,6 @@ type Facing struct {
 }
 
 func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
-	println(">", facing.X, facing.Y)
-
 	return &sdl.Rect{
 		source.X + (facing.X * tSz),
 		source.Y + (facing.Y * tSz),
@@ -323,19 +323,22 @@ func actProc() {
 		if obj.Handlers != nil &&
 			obj.Handlers.OnActEvent != nil &&
 			checkCol(action_hit_box, obj.Position) {
-			obj.Handlers.OnActEvent(obj)
+			obj.Handlers.OnActEvent(obj, PC.Solid)
+
 			return
 		}
 	}
 }
 
-func onColHdk(o *Solid) {
-	o.Destroy()
+func onColHdk(hdk *Solid, tgt *Solid) {
+	if tgt.CharPtr != nil {
+		tgt.CharPtr.depletHP(hdk.Handlers.OnCollDmg)
+	}
+	hdk.Destroy()
 }
 
 func (c *Char) peformHaduken() {
 	r := ActHitBox(c.Solid.Position, c.Solid.Facing.Orientation)
-	println(r.X, r.Y, "X", c.Solid.Position.X, c.Solid.Position.Y)
 	h := &Solid{
 		Position: r,
 		Txt:      glowTxt,
@@ -352,6 +355,7 @@ func (c *Char) peformHaduken() {
 		MPattern: []Movement{
 			Movement{c.Solid.Facing.Orientation, 255},
 		},
+		Collision: 1,
 	}
 	Interactive = append(Interactive, h)
 }
@@ -359,9 +363,6 @@ func (c *Char) peformHaduken() {
 func handleKeyEvent(key sdl.Keycode) Vector2d {
 	N := Vector2d{0, 0}
 	switch key {
-	case KEY_C:
-		PC.peformHaduken()
-		return N
 	case KEY_SPACE_BAR:
 		actProc()
 		return N
@@ -376,11 +377,14 @@ func handleKeyEvent(key sdl.Keycode) Vector2d {
 	case KEY_ARROW_RIGHT:
 		return F_RIGHT
 	}
+
 	return N
 }
 
 func handleKeyUpEvent(key sdl.Keycode) {
 	switch key {
+	case KEY_C:
+		PC.peformHaduken()
 	case KEY_LEFT_SHIT:
 		PC.Speed = 1
 	case KEY_ARROW_UP:
@@ -411,27 +415,16 @@ func (s *Solid) procMovement(speed int32) {
 	}
 
 	for _, obj := range CullMap {
+		if obj == s || obj.Position == nil {
+			continue
+		}
 		fr := feetRect(np)
 		if checkCol(fr, obj.Position) && obj.Collision == 1 {
+			if obj.Handlers != nil && obj.Handlers.OnCollEvent != nil {
+				obj.Handlers.OnCollEvent(obj, s)
+			}
 			return
 		}
-	}
-
-	newScreenPos := worldToScreen(np, Cam)
-	if (Cam.DZx - newScreenPos.X) > 0 {
-		Cam.P.X -= (Cam.DZx - newScreenPos.X)
-	}
-
-	if (winWidth - Cam.DZx) < (newScreenPos.X + tSz) {
-		Cam.P.X += (newScreenPos.X + tSz) - (winWidth - Cam.DZx)
-	}
-
-	if (Cam.DZy - newScreenPos.Y) > 0 {
-		Cam.P.Y -= (Cam.DZy - newScreenPos.Y)
-	}
-
-	if (winHeight - Cam.DZy) < (newScreenPos.Y + tSz) {
-		Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
 	}
 
 	s.Facing.Orientation = *s.Velocity
@@ -469,6 +462,24 @@ func catchEvents() bool {
 			PC.Solid.Anim.Pose = getNextPose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
 			PC.Solid.Anim.PoseTick = 8
 		}
+
+		newScreenPos := worldToScreen(PC.Solid.Position, Cam)
+		if (Cam.DZx - newScreenPos.X) > 0 {
+			Cam.P.X -= (Cam.DZx - newScreenPos.X)
+		}
+
+		if (winWidth - Cam.DZx) < (newScreenPos.X + tSz) {
+			Cam.P.X += (newScreenPos.X + tSz) - (winWidth - Cam.DZx)
+		}
+
+		if (Cam.DZy - newScreenPos.Y) > 0 {
+			Cam.P.Y -= (Cam.DZy - newScreenPos.Y)
+		}
+
+		if (winHeight - Cam.DZy) < (newScreenPos.Y + tSz) {
+			Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
+		}
+
 	}
 
 	return true
@@ -593,11 +604,12 @@ func (s *Scene) populate(population int) {
 					Chase: PC.Solid,
 				},
 				Speed:     1,
-				CurrentHP: 220,
-				MaxHP:     250,
-				CurrentST: 65,
-				MaxST:     100,
+				CurrentHP: 50,
+				MaxHP:     50,
+				CurrentST: 50,
+				MaxST:     50,
 			}
+			mon.Solid.CharPtr = &mon
 			Monsters = append(Monsters, &mon)
 			break
 		}
@@ -616,6 +628,10 @@ func (s *Scene) update() {
 
 	for _, cObj := range CullMap {
 
+		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
+			cObj.Destroy()
+		}
+
 		if cObj.Anim != nil {
 			// update Interactives poses
 			animObj := cObj.Anim
@@ -630,10 +646,10 @@ func (s *Scene) update() {
 			fr := feetRect(PC.Solid.Position)
 			if checkCol(fr, cObj.Position) {
 				if cObj.Handlers.OnCollDmg != 0 {
-					depletHP(cObj.Handlers.OnCollDmg)
+					PC.depletHP(cObj.Handlers.OnCollDmg)
 				}
 				if cObj.Handlers.OnCollEvent != nil {
-					cObj.Handlers.OnCollEvent(cObj)
+					cObj.Handlers.OnCollEvent(PC.Solid, cObj)
 				}
 			}
 		}
@@ -663,37 +679,23 @@ func (s *Solid) LoSCheck(int32) bool {
 }
 
 func (s *Solid) chase() {
-	// TODO - LINE OF SIGHT CHECK
-	new_pos := &sdl.Rect{s.Position.X, s.Position.Y, s.Position.W, s.Position.H}
 
 	if s.Chase.Position.X > s.Position.X {
-		new_pos.X += 1
+		s.Velocity.X = 1
 	}
 
 	if s.Chase.Position.X < s.Position.X {
-		new_pos.X -= 1
+		s.Velocity.X = -1
 	}
 
 	if s.Chase.Position.Y < s.Position.Y {
-		new_pos.Y -= 1
+		s.Velocity.Y = -1
 	}
 
 	if s.Chase.Position.Y > s.Position.Y {
-		new_pos.Y += 1
+		s.Velocity.Y = 1
 	}
-
-	f := feetRect(new_pos)
-	for _, obj := range CullMap {
-		if obj.Position != nil && s != obj && checkCol(f, obj.Position) {
-			if obj.Handlers.OnCollEvent != nil {
-				obj.Handlers.OnCollEvent(obj)
-			}
-			if obj.Collision == 1 {
-				return
-			}
-		}
-	}
-	s.Position = new_pos
+	s.procMovement(s.CharPtr.Speed)
 
 	return
 }
@@ -725,11 +727,11 @@ func (s *Solid) peformPattern(sp int32) {
 	}
 }
 
-func pickUp(s *Solid) {
-	if s.Handlers.OnPickUp != nil {
-		s.Handlers.OnPickUp(s)
+func pickUp(picker *Solid, item *Solid) {
+	if item.Handlers != nil && item.Handlers.OnPickUp != nil {
+		item.Handlers.OnPickUp(picker, item)
 	}
-	s.Destroy()
+	item.Destroy()
 }
 
 func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
@@ -814,14 +816,13 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 }
 
 func (s *Solid) Destroy() {
-
 	s.Position = nil
 	s.Source = nil
 	s.Facing = Facing{}
 	s.Anim = nil
 	s.Handlers = nil
 	s.Txt = nil
-	s.Collision = 4
+	s.Collision = 0
 }
 
 func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
@@ -842,9 +843,6 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 				src = obj.Source
 			}
 			renderer.Copy(obj.Txt, src, scrPos)
-
-			//renderer.SetDrawColor(0, 255, 0, 255)
-			//renderer.DrawRect(scrPos)
 			CullMap = append(CullMap, obj)
 		}
 	}
@@ -852,14 +850,15 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 
 func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 
-	renderer.SetDrawColor(0, 255, 0, 255)
-
 	for _, mon := range Monsters {
+		if mon.Solid.Anim == nil || mon.Solid == nil || mon.Solid.Position == nil {
+			continue
+		}
 		scrPos := worldToScreen(mon.Solid.Position, Cam)
 
 		if inScreen(scrPos) {
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
-			renderer.Copy(mon.Solid.Txt, src, scrPos)
+			renderer.Copy(spritesheetTxt, src, scrPos)
 			renderer.DrawRect(scrPos)
 			CullMap = append(CullMap, mon.Solid)
 		}
@@ -917,36 +916,31 @@ func calcPerc(v1 uint16, v2 uint16) float32 {
 }
 
 func worldToScreen(pos *sdl.Rect, cam Camera) *sdl.Rect {
-	return &sdl.Rect{
-		pos.X - cam.P.X,
-		pos.Y - cam.P.Y,
-		pos.W,
-		pos.H,
-	}
+	return &sdl.Rect{(pos.X - cam.P.X), (pos.Y - cam.P.Y), pos.W, pos.H}
 }
 
 func inScreen(r *sdl.Rect) bool {
-	return (r.X > (r.W*-1) && r.X < winWidth &&
-		r.Y > (r.H*-1) && r.Y < winHeight)
+	return (r.X > (r.W*-1) && r.X < winWidth && r.Y > (r.H*-1) && r.Y < winHeight)
 }
 
-func depletHP(dmg uint16) {
-	if dmg > PC.CurrentHP {
-		PC.CurrentHP = 0
+func (ch *Char) depletHP(dmg uint16) {
+	if dmg > ch.CurrentHP {
+		ch.CurrentHP = 0
 	} else {
-		PC.CurrentHP -= dmg
-		PC.PushBack(24)
+		ch.CurrentHP -= dmg
 	}
+	ch.PushBack(8)
 }
 
 func (c *Char) PushBack(d int32) {
 	f := c.Solid.Facing.Orientation
+	println(">>>", f.X, f.Y)
 	c.Solid.Position.X -= f.X * d
 	c.Solid.Position.Y -= f.Y * d
 }
 
-func BashDoor(obj *Solid) {
-	change_scene(obj.Handlers.DoorTo, nil)
+func BashDoor(actor *Solid, door *Solid) {
+	change_scene(door.Handlers.DoorTo, nil)
 }
 
 func main() {
@@ -958,39 +952,30 @@ func main() {
 
 	window, _ = sdl.CreateWindow(winTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
 		int(winWidth), int(winHeight), sdl.WINDOW_SHOWN)
-	defer window.Destroy()
-
 	renderer, _ = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
+	defer window.Destroy()
 	defer renderer.Destroy()
 
 	tilesetImg, _ := img.Load("assets/textures/ts1.bmp")
-	defer tilesetImg.Free()
-
-	tilesetTxt, _ = renderer.CreateTextureFromSurface(tilesetImg)
-	defer tilesetTxt.Destroy()
-
 	spritesheetImg, _ := img.Load("assets/textures/main_char.png")
-	defer spritesheetImg.Free()
-
-	spritesheetTxt, _ = renderer.CreateTextureFromSurface(spritesheetImg)
-	defer spritesheetTxt.Destroy()
-
 	powerupsImg, _ := img.Load("assets/textures/powerups_ts.png")
-	defer powerupsImg.Free()
-
-	powerupsTxt, _ = renderer.CreateTextureFromSurface(powerupsImg)
-	defer powerupsTxt.Destroy()
-
 	glowImg, _ := img.Load("assets/textures/glowing_ts.png")
-	defer glowImg.Free()
-
-	glowTxt, _ = renderer.CreateTextureFromSurface(glowImg)
-	defer glowTxt.Destroy()
-
 	slimeImg, _ := img.Load("assets/textures/slimes.png")
 	defer slimeImg.Free()
+	defer tilesetImg.Free()
+	defer spritesheetImg.Free()
+	defer powerupsImg.Free()
+	defer glowImg.Free()
 
+	tilesetTxt, _ = renderer.CreateTextureFromSurface(tilesetImg)
+	spritesheetTxt, _ = renderer.CreateTextureFromSurface(spritesheetImg)
+	powerupsTxt, _ = renderer.CreateTextureFromSurface(powerupsImg)
+	glowTxt, _ = renderer.CreateTextureFromSurface(glowImg)
 	slimeTxt, _ = renderer.CreateTextureFromSurface(slimeImg)
+	defer tilesetTxt.Destroy()
+	defer spritesheetTxt.Destroy()
+	defer powerupsTxt.Destroy()
+	defer glowTxt.Destroy()
 	defer slimeTxt.Destroy()
 
 	var running bool = true
@@ -999,10 +984,11 @@ func main() {
 		scn.TileSet = tilesetTxt
 	}
 
+	PC.Solid.CharPtr = &PC
+
 	renderer.SetDrawColor(0, 0, 255, 255)
 	scene = SCENES[0]
 	change_scene(scene, nil)
-
 	for running {
 		then := time.Now()
 
@@ -1017,10 +1003,6 @@ func main() {
 
 func V2R(v Vector2d, w int32, h int32) *sdl.Rect {
 	return &sdl.Rect{v.X, v.Y, w, h}
-}
-
-func R2Vo(r *sdl.Rect) Vector2d {
-	return Vector2d{r.X, r.Y}
 }
 
 func change_scene(new_scene *Scene, staring_pos *Vector2d) {
