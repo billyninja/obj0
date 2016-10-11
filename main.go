@@ -96,9 +96,11 @@ type PowerUp struct {
 }
 
 type Char struct {
-	Solid *Solid
-	Buffs []*PowerUp
-
+	Solid     *Solid
+	Buffs     []*PowerUp
+	Lvl       uint8
+	CurrentXP uint16
+	NextLvlXP uint16
 	Speed     int32
 	CurrentHP uint16
 	MaxHP     uint16
@@ -290,6 +292,11 @@ var (
 				PoseTick: 24,
 			},
 		},
+
+		Lvl:       1,
+		CurrentXP: 0,
+		NextLvlXP: 100,
+
 		Buffs:     []*PowerUp{ATK_UP, DEF_UP},
 		Speed:     1,
 		CurrentHP: 220,
@@ -655,6 +662,12 @@ func (s *Scene) update() {
 
 		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
 			cObj.Destroy()
+			PC.CurrentXP += uint16(cObj.CharPtr.MaxHP / 10)
+			if PC.CurrentXP >= PC.NextLvlXP {
+				PC.CurrentXP = 0
+				PC.Lvl++
+				PC.NextLvlXP = PC.NextLvlXP * uint16(1+PC.Lvl/2)
+			}
 		}
 
 		if cObj.Anim != nil {
@@ -902,14 +915,20 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.SetDrawColor(0, 255, 0, 255)
 	renderer.FillRect(&sdl.Rect{10, 10, int32(calcPerc(PC.CurrentHP, PC.MaxHP)), 4})
 
-	// MANA BAR BG
+	// MANA BAR
 	renderer.SetDrawColor(190, 0, 120, 255)
 	renderer.FillRect(&sdl.Rect{10, 24, 100, 4})
 	renderer.SetDrawColor(0, 0, 255, 255)
 	renderer.FillRect(&sdl.Rect{10, 24, int32(calcPerc(PC.CurrentST, PC.MaxST)), 4})
 
+	// XP BAR
+	renderer.SetDrawColor(90, 90, 0, 255)
+	renderer.FillRect(&sdl.Rect{10, 38, 100, 4})
+	renderer.SetDrawColor(190, 190, 0, 255)
+	renderer.FillRect(&sdl.Rect{10, 38, int32(calcPerc(PC.CurrentXP, PC.NextLvlXP)), 4})
+
 	for i, b := range PC.Buffs {
-		pos := sdl.Rect{8 + (int32(i) * 32), 32, 24, 24}
+		pos := sdl.Rect{8 + (int32(i) * 32), 48, 24, 24}
 		renderer.Copy(powerupsTxt, b.Ico, &pos)
 	}
 	for _, el := range GUI {
