@@ -338,6 +338,13 @@ func onColHdk(hdk *Solid, tgt *Solid) {
 }
 
 func (c *Char) peformHaduken() {
+	var stCost uint16 = 12
+
+	if stCost > c.CurrentST {
+		return
+	}
+	c.CurrentST -= stCost
+
 	r := ActHitBox(c.Solid.Position, c.Solid.Facing.Orientation)
 	h := &Solid{
 		Position: r,
@@ -481,8 +488,26 @@ func catchEvents() bool {
 		}
 
 	}
+	if time.Now().Nanosecond()%2 == 1 {
+		if isMoving(PC.Solid.Velocity) && PC.Speed > 1 {
+			if PC.CurrentST <= uint16(PC.Speed) {
+				PC.CurrentST = 0
+				PC.Speed = 1
+			} else {
+				PC.CurrentST -= uint16(PC.Speed)
+			}
+		} else {
+			if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
+				PC.CurrentST += 1
+			}
+		}
+	}
 
 	return true
+}
+
+func isMoving(vel *Vector2d) bool {
+	return (vel.X != 0 || vel.Y != 0)
 }
 
 func getNextPose(action [8]*sdl.Rect, currPose uint8) uint8 {
@@ -584,7 +609,7 @@ func (s *Scene) populate(population int) {
 					Position:  absolute_pos,
 					Velocity:  &Vector2d{0, 0},
 					Txt:       slimeTxt,
-					Collision: 1,
+					Collision: 2,
 					Facing:    DEFAULT_FACING,
 					Anim: &Animation{
 						Action:   MAN_WALK_FRONT,
@@ -934,7 +959,6 @@ func (ch *Char) depletHP(dmg uint16) {
 
 func (c *Char) PushBack(d int32) {
 	f := c.Solid.Facing.Orientation
-	println(">>>", f.X, f.Y)
 	c.Solid.Position.X -= f.X * d
 	c.Solid.Position.Y -= f.Y * d
 }
@@ -997,7 +1021,7 @@ func main() {
 
 		println((time.Since(then)) / time.Microsecond)
 		running = catchEvents()
-		sdl.Delay(16)
+		sdl.Delay(22)
 	}
 }
 
