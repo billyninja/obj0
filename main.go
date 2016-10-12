@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/sdl_image"
+	"github.com/veandco/go-sdl2/sdl_ttf"
 	"math/rand"
 	"runtime"
 	"time"
@@ -20,7 +22,7 @@ const (
 	KEY_ARROW_LEFT            = 1073741904
 	KEY_ARROW_RIGHT           = 1073741903
 	KEY_LEFT_SHIT             = 1073742049
-	KEY_SPACE_BAR             = 1073741824 // 32
+	KEY_SPACE_BAR             = 32
 	KEY_C                     = 99
 )
 
@@ -68,7 +70,9 @@ type Solid struct {
 	Anim      *Animation
 	Handlers  *InteractionHandlers
 	Txt       *sdl.Texture
+	Ttl       int64
 	Collision uint8
+
 	// AI RELATED
 	CPattern uint32
 	MPattern []Movement
@@ -130,8 +134,10 @@ func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
 }
 
 var (
-	winTitle string = "Go-SDL2 Obj0"
-	event    sdl.Event
+	winTitle     string = "Go-SDL2 Obj0"
+	event        sdl.Event
+	font         *ttf.Font
+	game_latency time.Duration
 
 	tilesetTxt     *sdl.Texture = nil
 	spritesheetTxt *sdl.Texture = nil
@@ -320,18 +326,32 @@ func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 		r1.Y+r1.H > r2.Y)
 }
 
+type TextEl struct {
+	Font         *ttf.Font
+	Content      string
+	Color        sdl.Color
+	BakedContent string
+}
+
+func (t *TextEl) Bake(renderer *sdl.Renderer) (*sdl.Texture, int32, int32) {
+
+	surface, _ := t.Font.RenderUTF8_Blended_Wrapped(t.Content, t.Color, int(winWidth))
+	defer surface.Free()
+	txtr, _ := renderer.CreateTextureFromSurface(surface)
+
+	return txtr, surface.W, surface.H
+}
+
 func actProc() {
 	action_hit_box := ActHitBox(PC.Solid.Position, PC.Solid.Facing.Orientation)
 
 	// Debug hint
 	GUI = append(GUI, action_hit_box)
-
 	for _, obj := range CullMap {
 		if obj.Handlers != nil &&
 			obj.Handlers.OnActEvent != nil &&
 			checkCol(action_hit_box, obj.Position) {
-			obj.Handlers.OnActEvent(obj, PC.Solid)
-
+			obj.Handlers.OnActEvent(PC.Solid, obj)
 			return
 		}
 	}
@@ -341,6 +361,20 @@ func onColHdk(hdk *Solid, tgt *Solid) {
 	if tgt.CharPtr != nil {
 		tgt.CharPtr.depletHP(hdk.Handlers.OnCollDmg)
 	}
+	sol := &Solid{
+		Position: &sdl.Rect{hdk.Position.X, hdk.Position.Y, tSz, tSz},
+		Txt:      glowTxt,
+		Anim: &Animation{
+			Action:   YGLOW_A,
+			Pose:     0,
+			PoseTick: 16,
+		},
+		Ttl:       time.Now().Add(100 * time.Millisecond).Unix(),
+		Collision: 0,
+	}
+
+	Interactive = append(Interactive, sol)
+
 	hdk.Destroy()
 }
 
@@ -353,9 +387,12 @@ func (c *Char) peformHaduken() {
 	c.CurrentST -= stCost
 
 	r := ActHitBox(c.Solid.Position, c.Solid.Facing.Orientation)
+	ttl := time.Now().Add(3 * time.Second)
+
 	h := &Solid{
 		Position: r,
 		Txt:      glowTxt,
+		Ttl:      ttl.Unix(),
 		Anim: &Animation{
 			Action:   BGLOW_A,
 			Pose:     0,
@@ -501,7 +538,7 @@ func catchEvents() bool {
 				PC.CurrentST = 0
 				PC.Speed = 1
 			} else {
-				PC.CurrentST -= uint16(PC.Speed)
+				PC.CurrentST -= 1
 			}
 		} else {
 			if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
@@ -606,12 +643,18 @@ func (s *Scene) populate(population int) {
 				Collision: 0,
 				Handlers: &InteractionHandlers{
 					OnCollEvent: pickUp,
+					OnPickUp: func(healed *Solid, healer *Solid) {
+						if healed.CharPtr != nil {
+							healed.CharPtr.CurrentHP += 10
+						}
+					},
 				},
 			}
 			Interactive = append(Interactive, sol)
 			break
 		case 4:
 			mon := Char{
+				Lvl: 10,
 				Solid: &Solid{
 					Position:  absolute_pos,
 					Velocity:  &Vector2d{0, 0},
@@ -658,10 +701,34 @@ func (s *Scene) update() {
 	EventTick -= 1
 	AiTick -= 1
 
+	now := time.Now().Unix()
 	for _, cObj := range CullMap {
-
-		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
+		// Ttl kill
+		if cObj.Ttl > 0 && cObj.Ttl < now {
 			cObj.Destroy()
+		}
+
+		// Kill logic
+		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
+			drop := &Solid{
+				Position: cObj.Position,
+				Txt:      powerupsTxt,
+				Source:   BF_ATK_UP,
+				Handlers: &InteractionHandlers{
+					OnActEvent: pickUp,
+					OnPickUp: func(picker *Solid, picked *Solid) {
+						if picker.CharPtr != nil {
+							picker.CharPtr.CurrentST = picker.CharPtr.MaxST
+						}
+					},
+				},
+			}
+			drop.Position.W = 24
+			drop.Position.H = 24
+			Interactive = append(Interactive, drop)
+
+			cObj.Destroy()
+
 			PC.CurrentXP += uint16(cObj.CharPtr.MaxHP / 10)
 			if PC.CurrentXP >= PC.NextLvlXP {
 				PC.CurrentXP = 0
@@ -717,22 +784,24 @@ func (s *Solid) LoSCheck(int32) bool {
 }
 
 func (s *Solid) chase() {
+	s.Velocity.X = 0
+	s.Velocity.Y = 0
 
-	if s.Chase.Position.X > s.Position.X {
-		s.Velocity.X = 1
-	}
-
-	if s.Chase.Position.X < s.Position.X {
+	if s.Position.X > s.Chase.Position.X {
 		s.Velocity.X = -1
 	}
 
-	if s.Chase.Position.Y < s.Position.Y {
+	if s.Position.X < s.Chase.Position.X {
+		s.Velocity.X = 1
+	}
+	if s.Position.Y > s.Chase.Position.Y {
 		s.Velocity.Y = -1
 	}
 
-	if s.Chase.Position.Y > s.Position.Y {
+	if s.Position.Y < s.Chase.Position.Y {
 		s.Velocity.Y = 1
 	}
+
 	s.procMovement(s.CharPtr.Speed)
 
 	return
@@ -766,7 +835,7 @@ func (s *Solid) peformPattern(sp int32) {
 }
 
 func pickUp(picker *Solid, item *Solid) {
-	if item.Handlers != nil && item.Handlers.OnPickUp != nil {
+	if item.Handlers != nil {
 		item.Handlers.OnPickUp(picker, item)
 	}
 	item.Destroy()
@@ -847,8 +916,6 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 			if Source != nil && &screenPos != nil {
 			}
 			renderer.Copy(s.TileSet, Source, &screenPos)
-			// renderer.SetDrawColor(0, 0, 255, 255)
-			// renderer.DrawRect(&screenPos)
 		}
 	}
 }
@@ -936,6 +1003,34 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 		renderer.SetDrawColor(255, 0, 0, 255)
 		renderer.DrawRect(scrPos)
 	}
+
+	lvl_TextEl := TextEl{
+		Font:    font,
+		Content: fmt.Sprintf("Lvl. %d", PC.Lvl),
+		Color:   sdl.Color{255, 255, 255, 255},
+	}
+	lvl_txtr, W, H := lvl_TextEl.Bake(renderer)
+	renderer.Copy(lvl_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{128, 60, W, H})
+
+	dbg_content := fmt.Sprintf(
+		"px %d py %d|vx %d vy %d\n cull %d i %d cX %d cY %d L %dus",
+		PC.Solid.Position.X,
+		PC.Solid.Position.Y,
+		PC.Solid.Velocity.X,
+		PC.Solid.Velocity.Y,
+		len(CullMap),
+		len(Interactive),
+		Cam.P.X,
+		Cam.P.Y,
+		game_latency,
+	)
+	dbg_TextEl := TextEl{
+		Font:    font,
+		Content: dbg_content,
+		Color:   sdl.Color{255, 255, 255, 255},
+	}
+	dbg_txtr, W, H := dbg_TextEl.Bake(renderer)
+	renderer.Copy(dbg_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{0, winHeight - H, W, H})
 }
 
 func (s *Scene) render(renderer *sdl.Renderer) {
@@ -944,11 +1039,9 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 	s._terrainRender(renderer)
 	s._solidsRender(renderer)
 	s._monstersRender(renderer)
-
 	// Rendering the PC
 	scrPos := worldToScreen(PC.Solid.Position, Cam)
 	renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], scrPos)
-
 	s._GUIRender(renderer)
 
 	// FLUSH FRAME
@@ -999,6 +1092,9 @@ func main() {
 	defer window.Destroy()
 	defer renderer.Destroy()
 
+	ttf.Init()
+	font, _ = ttf.OpenFont("assets/textures/PressStart2P.ttf", 12)
+
 	tilesetImg, _ := img.Load("assets/textures/ts1.bmp")
 	spritesheetImg, _ := img.Load("assets/textures/main_char.png")
 	powerupsImg, _ := img.Load("assets/textures/powerups_ts.png")
@@ -1028,7 +1124,6 @@ func main() {
 	}
 
 	PC.Solid.CharPtr = &PC
-
 	renderer.SetDrawColor(0, 0, 255, 255)
 	scene = SCENES[0]
 	change_scene(scene, nil)
@@ -1038,7 +1133,8 @@ func main() {
 		scene.update()
 		scene.render(renderer)
 
-		println((time.Since(then)) / time.Microsecond)
+		game_latency = (time.Since(then) / time.Microsecond)
+
 		running = catchEvents()
 		sdl.Delay(22)
 	}
