@@ -57,9 +57,10 @@ type InteractionHandlers struct {
 	OnPickUp    Event
 	OnActDmg    uint16
 
-	OnActPush  *Vector2d
-	OnActEvent Event
-	DoorTo     *Scene
+	OnActPush    *Vector2d
+	OnActEvent   Event
+	DialogScript []string
+	DoorTo       *Scene
 }
 
 type Solid struct {
@@ -443,23 +444,24 @@ func (c *Char) peformHaduken() {
 	Interactive = append(Interactive, h)
 }
 
-func (db *DBox) NextText() {
+func (db *DBox) NextText() bool {
 	if len(dbox.Text) == 0 {
-		return
+		return false
 	}
 	dbox.CurrText += 1
 	if int(dbox.CurrText+1) > len(dbox.Text) {
 		dbox.Text = []*TextEl{}
 		dbox.CurrText = 0
 	}
+	return true
 }
 func handleKeyEvent(key sdl.Keycode) Vector2d {
 	N := Vector2d{0, 0}
 	switch key {
 	case KEY_SPACE_BAR:
-		dbox.NextText()
-
-		actProc()
+		if !dbox.NextText() {
+			actProc()
+		}
 		return N
 	case KEY_LEFT_SHIT:
 		PC.Speed = 2
@@ -731,14 +733,46 @@ func (s *Scene) populate(population int) {
 			mon.Solid.CharPtr = &mon
 			Monsters = append(Monsters, &mon)
 			break
+		case 5:
+			fnpc := Char{
+				Solid: &Solid{
+					Position:  absolute_pos,
+					Velocity:  &Vector2d{0, 0},
+					Txt:       spritesheetTxt,
+					Collision: 1,
+					Facing:    DEFAULT_FACING,
+					Anim: &Animation{
+						Action:   MAN_WALK_FRONT,
+						Pose:     0,
+						PoseTick: 16,
+					},
+					Handlers: &InteractionHandlers{
+						OnActEvent:   PlayDialog,
+						DialogScript: []string{"more", "npc", "chitchat"},
+					},
+					CPattern: 0,
+					MPattern: []Movement{
+						Movement{F_UP, 90},
+						Movement{F_RIGHT, 10},
+						Movement{F_DOWN, 50},
+						Movement{F_LEFT, 10},
+					},
+				},
+				Speed:     1,
+				CurrentHP: 9999,
+				MaxHP:     9999,
+			}
+			fnpc.Solid.CharPtr = &fnpc
+			Monsters = append(Monsters, &fnpc)
+			break
 		}
+
 	}
 }
 
 var (
 	EventTick uint8 = 16
 	AiTick          = 16
-	blinkTick       = 32
 	dbox      DBox  = DBox{BGColor: sdl.Color{90, 90, 90, 255}}
 )
 
@@ -790,6 +824,11 @@ func (s *Scene) update() {
 				animObj.Pose = getNextPose(animObj.Action, animObj.Pose)
 				animObj.PoseTick = 16
 			}
+		}
+
+		if len(dbox.Text) > 0 {
+			AiTick = 16
+			return
 		}
 
 		if cObj.Handlers != nil && EventTick == 0 {
@@ -884,6 +923,12 @@ func pickUp(picker *Solid, item *Solid) {
 		item.Handlers.OnPickUp(picker, item)
 	}
 	item.Destroy()
+}
+
+func PlayDialog(listener *Solid, speaker *Solid) {
+	if len(speaker.Handlers.DialogScript) > 0 {
+		dbox.LoadText(speaker.Handlers.DialogScript)
+	}
 }
 
 func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
@@ -1008,7 +1053,7 @@ func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 
 		if inScreen(scrPos) {
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
-			renderer.Copy(spritesheetTxt, src, scrPos)
+			renderer.Copy(mon.Solid.Txt, src, scrPos)
 			renderer.DrawRect(scrPos)
 			CullMap = append(CullMap, mon.Solid)
 		}
@@ -1058,7 +1103,7 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.Copy(lvl_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{128, 60, W, H})
 
 	dbg_content := fmt.Sprintf(
-		"px %d py %d|vx %d vy %d\n cull %d i %d cX %d cY %d L %dus",
+		"px %d py %d|vx %d vy %d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
 		PC.Solid.Position.X,
 		PC.Solid.Position.Y,
 		PC.Solid.Velocity.X,
@@ -1068,6 +1113,8 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 		Cam.P.X,
 		Cam.P.Y,
 		game_latency,
+		EventTick,
+		AiTick,
 	)
 
 	dbox.Present(renderer)
