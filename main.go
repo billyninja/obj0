@@ -102,10 +102,10 @@ type PowerUp struct {
 type Char struct {
 	Solid     *Solid
 	Buffs     []*PowerUp
+	Speed     int32
 	Lvl       uint8
 	CurrentXP uint16
 	NextLvlXP uint16
-	Speed     int32
 	CurrentHP uint16
 	MaxHP     uint16
 	CurrentST uint16
@@ -122,6 +122,32 @@ type Facing struct {
 	DownRight   [8]*sdl.Rect
 	UpLeft      [8]*sdl.Rect
 	UpRight     [8]*sdl.Rect
+}
+
+type TextEl struct {
+	Font         *ttf.Font
+	Content      string
+	Color        sdl.Color
+	BakedContent string
+}
+
+type DBox struct {
+	SPos     uint8
+	CurrText uint8
+	Text     []*TextEl
+	BGColor  sdl.Color
+	Char     *Char
+}
+
+func (db *DBox) LoadText(content []string) {
+	db.Text = make([]*TextEl, len(content))
+	for i, s := range content {
+		db.Text[i] = &TextEl{
+			Font:    font,
+			Content: s,
+			Color:   sdl.Color{255, 255, 255, 255},
+		}
+	}
 }
 
 func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
@@ -147,11 +173,9 @@ var (
 	slimeTxt       *sdl.Texture = nil
 
 	GRASS     *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
-	TREE                = &sdl.Rect{0, 32, tSz, tSz}
 	DIRT                = &sdl.Rect{703, 0, tSz, tSz}
 	WALL                = &sdl.Rect{0, 64, tSz, tSz}
 	DOOR                = &sdl.Rect{256, 32, tSz, tSz}
-	WOMAN               = &sdl.Rect{0, 128, tSz, tSz}
 	BF_ATK_UP           = &sdl.Rect{72, 24, 24, 24}
 	BF_DEF_UP           = &sdl.Rect{96, 24, 24, 24}
 
@@ -178,25 +202,23 @@ var (
 	MAN_BACK_R  *sdl.Rect = &sdl.Rect{0, 96, tSz, tSz}
 	MAN_BACK_N  *sdl.Rect = &sdl.Rect{32, 96, tSz, tSz}
 	MAN_BACK_L  *sdl.Rect = &sdl.Rect{64, 96, tSz, tSz}
+	MAN_UL_R    *sdl.Rect = &sdl.Rect{96, 32, tSz, tSz}
+	MAN_UL_N    *sdl.Rect = &sdl.Rect{128, 32, tSz, tSz}
+	MAN_UL_L    *sdl.Rect = &sdl.Rect{160, 32, tSz, tSz}
+	MAN_UR_R    *sdl.Rect = &sdl.Rect{96, 96, tSz, tSz}
+	MAN_UR_N    *sdl.Rect = &sdl.Rect{128, 96, tSz, tSz}
+	MAN_UR_L    *sdl.Rect = &sdl.Rect{160, 96, tSz, tSz}
+	MAN_DL_R    *sdl.Rect = &sdl.Rect{96, 0, tSz, tSz}
+	MAN_DL_N    *sdl.Rect = &sdl.Rect{128, 0, tSz, tSz}
+	MAN_DL_L    *sdl.Rect = &sdl.Rect{160, 0, tSz, tSz}
+	MAN_DR_R    *sdl.Rect = &sdl.Rect{96, 64, tSz, tSz}
+	MAN_DR_N    *sdl.Rect = &sdl.Rect{128, 64, tSz, tSz}
+	MAN_DR_L    *sdl.Rect = &sdl.Rect{160, 64, tSz, tSz}
 
-	MAN_UL_R *sdl.Rect = &sdl.Rect{96, 32, tSz, tSz}
-	MAN_UL_N *sdl.Rect = &sdl.Rect{128, 32, tSz, tSz}
-	MAN_UL_L *sdl.Rect = &sdl.Rect{160, 32, tSz, tSz}
-	MAN_UR_R *sdl.Rect = &sdl.Rect{96, 96, tSz, tSz}
-	MAN_UR_N *sdl.Rect = &sdl.Rect{128, 96, tSz, tSz}
-	MAN_UR_L *sdl.Rect = &sdl.Rect{160, 96, tSz, tSz}
-	MAN_DL_R *sdl.Rect = &sdl.Rect{96, 0, tSz, tSz}
-	MAN_DL_N *sdl.Rect = &sdl.Rect{128, 0, tSz, tSz}
-	MAN_DL_L *sdl.Rect = &sdl.Rect{160, 0, tSz, tSz}
-	MAN_DR_R *sdl.Rect = &sdl.Rect{96, 64, tSz, tSz}
-	MAN_DR_N *sdl.Rect = &sdl.Rect{128, 64, tSz, tSz}
-	MAN_DR_L *sdl.Rect = &sdl.Rect{160, 64, tSz, tSz}
-
-	MAN_WALK_DL [8]*sdl.Rect = [8]*sdl.Rect{MAN_DL_N, MAN_DL_L, MAN_DL_N, MAN_DL_R}
-	MAN_WALK_DR [8]*sdl.Rect = [8]*sdl.Rect{MAN_DR_N, MAN_DR_L, MAN_DR_N, MAN_DR_R}
-	MAN_WALK_UL [8]*sdl.Rect = [8]*sdl.Rect{MAN_UL_N, MAN_UL_L, MAN_UL_N, MAN_UL_R}
-	MAN_WALK_UR [8]*sdl.Rect = [8]*sdl.Rect{MAN_UR_N, MAN_UR_L, MAN_UR_N, MAN_UR_R}
-
+	MAN_WALK_DL    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DL_N, MAN_DL_L, MAN_DL_N, MAN_DL_R}
+	MAN_WALK_DR    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DR_N, MAN_DR_L, MAN_DR_N, MAN_DR_R}
+	MAN_WALK_UL    [8]*sdl.Rect = [8]*sdl.Rect{MAN_UL_N, MAN_UL_L, MAN_UL_N, MAN_UL_R}
+	MAN_WALK_UR    [8]*sdl.Rect = [8]*sdl.Rect{MAN_UR_N, MAN_UR_L, MAN_UR_N, MAN_UR_R}
 	MAN_WALK_FRONT [8]*sdl.Rect = [8]*sdl.Rect{MAN_FRONT_N, MAN_FRONT_R, MAN_FRONT_N, MAN_FRONT_L}
 	MAN_WALK_LEFT  [8]*sdl.Rect = [8]*sdl.Rect{MAN_LEFT_N, MAN_LEFT_R, MAN_LEFT_N, MAN_LEFT_L}
 	MAN_WALK_RIGHT [8]*sdl.Rect = [8]*sdl.Rect{MAN_RIGHT_N, MAN_RIGHT_R, MAN_RIGHT_N, MAN_RIGHT_L}
@@ -324,13 +346,6 @@ func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 		r1.X+r1.W > r2.X &&
 		r1.Y < r2.Y+r2.H &&
 		r1.Y+r1.H > r2.Y)
-}
-
-type TextEl struct {
-	Font         *ttf.Font
-	Content      string
-	Color        sdl.Color
-	BakedContent string
 }
 
 func (t *TextEl) Bake(renderer *sdl.Renderer) (*sdl.Texture, int32, int32) {
@@ -1024,6 +1039,13 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 		Cam.P.Y,
 		game_latency,
 	)
+
+	dbox := DBox{
+		BGColor: sdl.Color{90, 120, 90, 0},
+	}
+	sts := []string{"Hello World!", "Again"}
+	dbox.LoadText(sts)
+
 	dbg_TextEl := TextEl{
 		Font:    font,
 		Content: dbg_content,
