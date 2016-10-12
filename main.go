@@ -22,7 +22,7 @@ const (
 	KEY_ARROW_LEFT            = 1073741904
 	KEY_ARROW_RIGHT           = 1073741903
 	KEY_LEFT_SHIT             = 1073742049
-	KEY_SPACE_BAR             = 32
+	KEY_SPACE_BAR             = 1073741824 //32
 	KEY_C                     = 99
 )
 
@@ -148,6 +148,23 @@ func (db *DBox) LoadText(content []string) {
 			Color:   sdl.Color{255, 255, 255, 255},
 		}
 	}
+}
+
+func (db *DBox) Present(renderer *sdl.Renderer) {
+
+	if len(db.Text) == 0 {
+		return
+	}
+
+	ct := db.Text[db.CurrText]
+	txtr, w, h := ct.Bake(renderer)
+	br := &sdl.Rect{64, winHeight - 128, 512, 120}
+	tr := &sdl.Rect{0, 0, w, h}
+	bt := &sdl.Rect{64, winHeight - 128, w, h}
+
+	renderer.SetDrawColor(db.BGColor.R, db.BGColor.G, db.BGColor.B, db.BGColor.A)
+	renderer.FillRect(br)
+	renderer.Copy(txtr, tr, bt)
 }
 
 func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
@@ -426,10 +443,22 @@ func (c *Char) peformHaduken() {
 	Interactive = append(Interactive, h)
 }
 
+func (db *DBox) NextText() {
+	if len(dbox.Text) == 0 {
+		return
+	}
+	dbox.CurrText += 1
+	if int(dbox.CurrText+1) > len(dbox.Text) {
+		dbox.Text = []*TextEl{}
+		dbox.CurrText = 0
+	}
+}
 func handleKeyEvent(key sdl.Keycode) Vector2d {
 	N := Vector2d{0, 0}
 	switch key {
 	case KEY_SPACE_BAR:
+		dbox.NextText()
+
 		actProc()
 		return N
 	case KEY_LEFT_SHIT:
@@ -710,6 +739,7 @@ var (
 	EventTick uint8 = 16
 	AiTick          = 16
 	blinkTick       = 32
+	dbox      DBox  = DBox{BGColor: sdl.Color{90, 90, 90, 255}}
 )
 
 func (s *Scene) update() {
@@ -1040,11 +1070,7 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 		game_latency,
 	)
 
-	dbox := DBox{
-		BGColor: sdl.Color{90, 120, 90, 0},
-	}
-	sts := []string{"Hello World!", "Again"}
-	dbox.LoadText(sts)
+	dbox.Present(renderer)
 
 	dbg_TextEl := TextEl{
 		Font:    font,
@@ -1148,6 +1174,7 @@ func main() {
 	PC.Solid.CharPtr = &PC
 	renderer.SetDrawColor(0, 0, 255, 255)
 	scene = SCENES[0]
+	dbox.LoadText([]string{"Hello World!", "Again!"})
 	change_scene(scene, nil)
 	for running {
 		then := time.Now()
