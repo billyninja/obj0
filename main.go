@@ -5,6 +5,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/sdl_image"
 	"github.com/veandco/go-sdl2/sdl_ttf"
+	//	"math"
 	"math/rand"
 	"runtime"
 	"time"
@@ -85,6 +86,7 @@ type Animation struct {
 	Action   [8]*sdl.Rect
 	Pose     uint8
 	PoseTick uint32
+	PlayMode uint8
 }
 
 type Movement struct {
@@ -115,14 +117,16 @@ type Char struct {
 
 type Facing struct {
 	Orientation Vector2d
-	Up          [8]*sdl.Rect
-	Down        [8]*sdl.Rect
-	Left        [8]*sdl.Rect
-	Right       [8]*sdl.Rect
-	DownLeft    [8]*sdl.Rect
-	DownRight   [8]*sdl.Rect
-	UpLeft      [8]*sdl.Rect
-	UpRight     [8]*sdl.Rect
+
+	Up        [8]*sdl.Rect
+	Down      [8]*sdl.Rect
+	Left      [8]*sdl.Rect
+	Right     [8]*sdl.Rect
+	DownLeft  [8]*sdl.Rect
+	DownRight [8]*sdl.Rect
+	UpLeft    [8]*sdl.Rect
+	UpRight   [8]*sdl.Rect
+	PushBack  [8]*sdl.Rect
 }
 
 type TextEl struct {
@@ -233,6 +237,15 @@ var (
 	MAN_DR_N    *sdl.Rect = &sdl.Rect{128, 64, tSz, tSz}
 	MAN_DR_L    *sdl.Rect = &sdl.Rect{160, 64, tSz, tSz}
 
+	MAN_PB_S1 *sdl.Rect = &sdl.Rect{96, 160, tSz, tSz}
+	MAN_PB_S2 *sdl.Rect = &sdl.Rect{128, 160, tSz, tSz}
+	MAN_PB_S3 *sdl.Rect = &sdl.Rect{160, 160, tSz, tSz}
+
+	MAN_CS_S1 *sdl.Rect = &sdl.Rect{192, 224, tSz, tSz}
+	MAN_CS_S2 *sdl.Rect = &sdl.Rect{224, 224, tSz, tSz}
+	MAN_CS_S3 *sdl.Rect = &sdl.Rect{256, 224, tSz, tSz}
+	MAN_CS_S4 *sdl.Rect = &sdl.Rect{224, 192, tSz, tSz}
+
 	MAN_WALK_DL    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DL_N, MAN_DL_L, MAN_DL_N, MAN_DL_R}
 	MAN_WALK_DR    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DR_N, MAN_DR_L, MAN_DR_N, MAN_DR_R}
 	MAN_WALK_UL    [8]*sdl.Rect = [8]*sdl.Rect{MAN_UL_N, MAN_UL_L, MAN_UL_N, MAN_UL_R}
@@ -241,6 +254,8 @@ var (
 	MAN_WALK_LEFT  [8]*sdl.Rect = [8]*sdl.Rect{MAN_LEFT_N, MAN_LEFT_R, MAN_LEFT_N, MAN_LEFT_L}
 	MAN_WALK_RIGHT [8]*sdl.Rect = [8]*sdl.Rect{MAN_RIGHT_N, MAN_RIGHT_R, MAN_RIGHT_N, MAN_RIGHT_L}
 	MAN_WALK_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_BACK_N, MAN_BACK_R, MAN_BACK_N, MAN_BACK_L}
+	MAN_PUSH_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_PB_S1, MAN_PB_S2, MAN_PB_S3}
+	MAN_CAST       [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S1, MAN_CS_S2, MAN_CS_S3, MAN_CS_S4}
 
 	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, tSz, tSz}
 	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, tSz, tSz}
@@ -263,14 +278,29 @@ var (
 
 	LAVA_ANIM = &Animation{
 		Action:   LAVA_A,
-		Pose:     0,
-		PoseTick: 16,
+		PoseTick: 8,
 	}
 
 	LIFE_ORB_ANIM = &Animation{
 		Action:   YGLOW_A,
-		Pose:     0,
-		PoseTick: 16,
+		PoseTick: 8,
+	}
+
+	WALK_FRONT_ANIM = &Animation{
+		Action:   MAN_WALK_FRONT,
+		PoseTick: 8,
+	}
+
+	MAN_PB_ANIM = &Animation{
+		Action:   MAN_PUSH_BACK,
+		PoseTick: 18,
+		PlayMode: 1,
+	}
+
+	MAN_CS_ANIM = &Animation{
+		Action:   MAN_CAST,
+		PoseTick: 18,
+		PlayMode: 1,
 	}
 
 	DEFAULT_FACING = Facing{
@@ -282,6 +312,7 @@ var (
 		DownRight: MAN_WALK_DR,
 		UpLeft:    MAN_WALK_UL,
 		UpRight:   MAN_WALK_UR,
+		PushBack:  MAN_PUSH_BACK,
 	}
 
 	LAVA_HANDLERS = &InteractionHandlers{
@@ -442,6 +473,7 @@ func (c *Char) peformHaduken() {
 		Collision: 1,
 	}
 	Interactive = append(Interactive, h)
+	PC.Solid.SetAnimation(MAN_CS_ANIM)
 }
 
 func (db *DBox) NextText() bool {
@@ -495,6 +527,29 @@ func handleKeyUpEvent(key sdl.Keycode) {
 	}
 }
 
+func (s *Solid) SetAnimation(an *Animation) {
+	var nA *Animation = &Animation{}
+	*nA = *an
+
+	s.Anim = nA
+	s.Anim.Pose = 0
+	s.Anim.PoseTick = 16
+}
+
+func (s *Solid) PlayAnimation() {
+	s.Anim.PoseTick -= 1
+	if s.Anim.PoseTick == 0 {
+		s.Anim.PoseTick = 16
+
+		pvrPose := PC.Solid.Anim.Pose
+		s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
+		if s.Anim.Pose < pvrPose && s.Anim.PlayMode == 1 {
+			// TODO BACK TO PREVIOUS ACTION
+			s.SetAnimation(WALK_FRONT_ANIM)
+		}
+	}
+}
+
 func (s *Solid) procMovement(speed int32) {
 	np := &sdl.Rect{
 		(s.Position.X + (s.Velocity.X * speed)),
@@ -524,15 +579,23 @@ func (s *Solid) procMovement(speed int32) {
 		}
 	}
 
-	s.Facing.Orientation = *s.Velocity
 	_, act := GetFacing(&s.Facing, *s.Velocity)
-	s.Anim.Action = act
-
+	if s.Anim.Action != act {
+		s.Anim.Action = act
+		s.Anim.Pose = 0
+		s.Anim.PoseTick = 8
+	}
+	s.Facing.Orientation = *s.Velocity
 	s.Position = np
 }
 
 func catchEvents() bool {
 	var c bool
+	if PC.Solid.Anim.PlayMode == 1 {
+		PC.Solid.PlayAnimation()
+		return true
+	}
+
 	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
@@ -553,12 +616,8 @@ func catchEvents() bool {
 	}
 
 	if c {
+		PC.Solid.PlayAnimation()
 		PC.Solid.procMovement(PC.Speed)
-		PC.Solid.Anim.PoseTick -= 1
-		if PC.Solid.Anim.PoseTick == 0 {
-			PC.Solid.Anim.Pose = getNextPose(PC.Solid.Anim.Action, PC.Solid.Anim.Pose)
-			PC.Solid.Anim.PoseTick = 8
-		}
 
 		newScreenPos := worldToScreen(PC.Solid.Position, Cam)
 		if (Cam.DZx - newScreenPos.X) > 0 {
@@ -576,7 +635,6 @@ func catchEvents() bool {
 		if (winHeight - Cam.DZy) < (newScreenPos.Y + tSz) {
 			Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
 		}
-
 	}
 	if time.Now().Nanosecond()%2 == 1 {
 		if isMoving(PC.Solid.Velocity) && PC.Speed > 1 {
@@ -613,7 +671,7 @@ func (s *Scene) build() {
 	nj := int(s.CellsY) + 1
 
 	println("start build: ", s.codename)
-
+	rand.Seed(int64(time.Now().Nanosecond()))
 	World = make([][]*sdl.Rect, ni)
 	println("Allocation rows", ni)
 
@@ -817,13 +875,7 @@ func (s *Scene) update() {
 		}
 
 		if cObj.Anim != nil {
-			// update Interactives poses
-			animObj := cObj.Anim
-			animObj.PoseTick -= 1
-			if animObj.PoseTick == 0 {
-				animObj.Pose = getNextPose(animObj.Action, animObj.Pose)
-				animObj.PoseTick = 16
-			}
+			cObj.PlayAnimation()
 		}
 
 		if len(dbox.Text) > 0 {
@@ -871,18 +923,21 @@ func (s *Solid) chase() {
 	s.Velocity.X = 0
 	s.Velocity.Y = 0
 
-	if s.Position.X > s.Chase.Position.X {
+	diffX := 13 //math.Abs(float64(s.Position.X - s.Chase.Position.X))
+	diffY := 13 //math.Abs(float64(s.Position.Y - s.Chase.Position.Y))
+
+	if diffX > 12 && s.Position.X > s.Chase.Position.X {
 		s.Velocity.X = -1
 	}
 
-	if s.Position.X < s.Chase.Position.X {
+	if diffX > 12 && s.Position.X < s.Chase.Position.X {
 		s.Velocity.X = 1
 	}
-	if s.Position.Y > s.Chase.Position.Y {
+	if diffY > 12 && s.Position.Y > s.Chase.Position.Y {
 		s.Velocity.Y = -1
 	}
 
-	if s.Position.Y < s.Chase.Position.Y {
+	if diffY > 12 && s.Position.Y < s.Chase.Position.Y {
 		s.Velocity.Y = 1
 	}
 
@@ -913,6 +968,7 @@ func (s *Solid) peformPattern(sp int32) {
 			_, na := GetFacing(&s.Facing, mov.Orientation)
 			if na != s.Anim.Action {
 				s.Anim.Action = na
+				s.Anim.PoseTick = 0
 			}
 		}
 	}
@@ -1103,11 +1159,16 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.Copy(lvl_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{128, 60, W, H})
 
 	dbg_content := fmt.Sprintf(
-		"px %d py %d|vx %d vy %d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
+		"px %d py %d|vx %d vy %d (%d, %d) An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
 		PC.Solid.Position.X,
 		PC.Solid.Position.Y,
 		PC.Solid.Velocity.X,
 		PC.Solid.Velocity.Y,
+		PC.Solid.Facing.Orientation.X,
+		PC.Solid.Facing.Orientation.Y,
+		PC.Solid.Anim.Pose,
+		PC.Solid.Anim.PoseTick,
+		PC.Solid.Anim.PlayMode,
 		len(CullMap),
 		len(Interactive),
 		Cam.P.X,
@@ -1166,8 +1227,11 @@ func (ch *Char) depletHP(dmg uint16) {
 
 func (c *Char) PushBack(d int32) {
 	f := c.Solid.Facing.Orientation
-	c.Solid.Position.X -= f.X * d
-	c.Solid.Position.Y -= f.Y * d
+	c.Solid.Position.X -= f.X * d * 4
+	c.Solid.Position.Y -= f.Y * d * 4
+	if c.Solid.Facing.PushBack[0] != nil {
+		c.Solid.SetAnimation(MAN_PB_ANIM)
+	}
 }
 
 func BashDoor(actor *Solid, door *Solid) {
@@ -1232,7 +1296,7 @@ func main() {
 		game_latency = (time.Since(then) / time.Microsecond)
 
 		running = catchEvents()
-		sdl.Delay(22)
+		sdl.Delay(24)
 	}
 }
 
