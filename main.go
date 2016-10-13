@@ -23,7 +23,7 @@ const (
 	KEY_ARROW_LEFT            = 1073741904
 	KEY_ARROW_RIGHT           = 1073741903
 	KEY_LEFT_SHIT             = 1073742049
-	KEY_SPACE_BAR             = 1073741824 //32
+	KEY_SPACE_BAR             = 32 //1073741824 //
 	KEY_C                     = 99
 )
 
@@ -369,11 +369,9 @@ var (
 				PoseTick: 24,
 			},
 		},
-
 		Lvl:       1,
 		CurrentXP: 0,
 		NextLvlXP: 100,
-
 		Buffs:     []*PowerUp{ATK_UP, DEF_UP},
 		Speed:     1,
 		CurrentHP: 220,
@@ -385,6 +383,7 @@ var (
 	scene       *Scene
 	World       [][]*sdl.Rect
 	Interactive []*Solid
+	Spawners    []*SpawnPoint
 	Monsters    []*Char
 	GUI         []*sdl.Rect
 	CullMap     []*Solid
@@ -544,7 +543,7 @@ func (s *Solid) PlayAnimation() {
 		pvrPose := PC.Solid.Anim.Pose
 		s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
 		if s.Anim.Pose < pvrPose && s.Anim.PlayMode == 1 {
-			// TODO BACK TO PREVIOUS ACTION
+			// TODO BACK TO ORIGINAL PREVIOUS ACTION
 			s.SetAnimation(WALK_FRONT_ANIM)
 		}
 	}
@@ -757,39 +756,13 @@ func (s *Scene) populate(population int) {
 			Interactive = append(Interactive, sol)
 			break
 		case 4:
-			mon := Char{
-				Lvl: 10,
-				Solid: &Solid{
-					Position:  absolute_pos,
-					Velocity:  &Vector2d{0, 0},
-					Txt:       slimeTxt,
-					Collision: 2,
-					Facing:    DEFAULT_FACING,
-					Anim: &Animation{
-						Action:   MAN_WALK_FRONT,
-						Pose:     0,
-						PoseTick: 16,
-					},
-					Handlers: &InteractionHandlers{
-						OnCollDmg: 12,
-					},
-					CPattern: 0,
-					MPattern: []Movement{
-						Movement{F_DOWN, 50},
-						Movement{F_UP, 90},
-						Movement{F_RIGHT, 10},
-						Movement{F_LEFT, 10},
-					},
-					Chase: PC.Solid,
-				},
-				Speed:     1,
-				CurrentHP: 50,
-				MaxHP:     50,
-				CurrentST: 50,
-				MaxST:     50,
+			absolute_pos.H = 240
+			absolute_pos.W = 240
+			spw := &SpawnPoint{
+				Position:  absolute_pos,
+				Frequency: 10,
 			}
-			mon.Solid.CharPtr = &mon
-			Monsters = append(Monsters, &mon)
+			Spawners = append(Spawners, spw)
 			break
 		case 5:
 			fnpc := Char{
@@ -903,12 +876,21 @@ func (s *Scene) update() {
 			}
 		}
 	}
+
+	for _, spw := range Spawners {
+		if EventTick == 0 {
+			mon := MonsterFactory(spw)
+			Interactive = append(Interactive, mon.Solid)
+		}
+	}
+
 	if EventTick == 0 {
 		EventTick = 16
 	}
 	if AiTick == 0 {
 		AiTick = 3
 	}
+
 }
 
 func (s *Solid) LoSCheck(int32) bool {
@@ -1187,6 +1169,10 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	}
 	dbg_txtr, W, H := dbg_TextEl.Bake(renderer)
 	renderer.Copy(dbg_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{0, winHeight - H, W, H})
+
+	for _, spw := range Spawners {
+		renderer.DrawRect(worldToScreen(spw.Position, Cam))
+	}
 }
 
 func (s *Scene) render(renderer *sdl.Renderer) {
@@ -1305,7 +1291,6 @@ func V2R(v Vector2d, w int32, h int32) *sdl.Rect {
 }
 
 func change_scene(new_scene *Scene, staring_pos *Vector2d) {
-
 	new_scene.build()
 	Interactive = []*Solid{}
 	new_scene.populate(200)
@@ -1317,4 +1302,49 @@ func change_scene(new_scene *Scene, staring_pos *Vector2d) {
 
 func feetRect(pos *sdl.Rect) *sdl.Rect {
 	return &sdl.Rect{pos.X, pos.Y + 16, pos.W, pos.H - 16}
+}
+
+type SpawnPoint struct {
+	Position  *sdl.Rect
+	Frequency uint16
+	//SpawnList []*SpawnCfg
+}
+
+func MonsterFactory(sp *SpawnPoint) *Char {
+
+	rand.Seed(int64(time.Now().Nanosecond()))
+
+	px := rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X
+	py := rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y
+
+	mon := Char{
+		Lvl: 10,
+		Solid: &Solid{
+			Position:  &sdl.Rect{px, py, tSz, tSz},
+			Velocity:  &Vector2d{0, 0},
+			Txt:       slimeTxt,
+			Collision: 2,
+			Facing:    DEFAULT_FACING,
+			Handlers: &InteractionHandlers{
+				OnCollDmg: 12,
+			},
+			CPattern: 0,
+			MPattern: []Movement{
+				Movement{F_DOWN, 50},
+				Movement{F_UP, 90},
+				Movement{F_RIGHT, 10},
+				Movement{F_LEFT, 10},
+			},
+			Chase: PC.Solid,
+		},
+		Speed:     1,
+		CurrentHP: 50,
+		MaxHP:     50,
+		CurrentST: 50,
+		MaxST:     50,
+	}
+	mon.Solid.SetAnimation(WALK_FRONT_ANIM)
+	mon.Solid.CharPtr = &mon
+
+	return &mon
 }
