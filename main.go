@@ -1235,9 +1235,18 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.FillRect(&sdl.Rect{10, 38, int32(calcPerc(PC.CurrentXP, PC.NextLvlXP)), 4})
 
 	for i, stack := range PC.Inventory {
-		println(">>>", i, stack.ItemTpl.Name, stack.Qty)
+		//println(">>>", i, stack.ItemTpl.Name, stack.Qty)
+		counter := TextEl{
+			Content: string(stack.Qty),
+			Font:    font,
+			Color:   sdl.Color{255, 255, 255, 255},
+		}
+
+		counterTxtr, cW, cH := counter.Bake(renderer)
 		pos := sdl.Rect{8 + (int32(i) * 32), 48, 24, 24}
 		renderer.Copy(stack.ItemTpl.Txtr, stack.ItemTpl.Source, &pos)
+
+		renderer.Copy(counterTxtr, &sdl.Rect{0, 0, cW, cH}, &pos)
 		renderer.DrawRect(&pos)
 	}
 
