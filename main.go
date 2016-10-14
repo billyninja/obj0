@@ -27,225 +27,6 @@ const (
 	KEY_C                     = 99
 )
 
-type Vector2d struct {
-	X int32
-	Y int32
-}
-
-type Scene struct {
-	codename   string
-	TileSet    *sdl.Texture
-	CellsX     int32
-	CellsY     int32
-	StartPoint Vector2d
-	CamPoint   Vector2d
-	tileA      *sdl.Rect
-	tileB      *sdl.Rect
-}
-
-type Camera struct {
-	P   Vector2d
-	DZx int32
-	DZy int32
-}
-
-type Event func(source *Solid, subject *Solid)
-
-type Item struct {
-	Name        string
-	Description string
-	Solid       *Solid
-	Weight      uint16
-	BaseValue   uint16
-}
-
-type Loot struct {
-	Item *Item
-	Perc float32
-}
-
-type MonsterTemplate struct {
-	Txtr          *sdl.Texture
-	Lvl           uint8
-	HP            uint16
-	Size          int32
-	LvlVariance   float32
-	ScalingFactor float32
-	LoS           int32
-	Loot          [8]*Loot
-}
-
-var (
-	GreenBlob *Item = &Item{
-		Name:        "Green Blob",
-		Description: "A chunck of slime.",
-		Solid: &Solid{
-			Source: &sdl.Rect{24, 0, 24, 24},
-			Txt:    spritesheetTxt,
-		},
-		Weight:    1,
-		BaseValue: 1,
-	}
-	CrystalizedJelly *Item = &Item{
-		Name:        "Green Blob",
-		Description: "Some believe that the Slime's soul live within it",
-		Solid: &Solid{
-			Source: &sdl.Rect{0, 0, 24, 24},
-			Txt:    powerupsTxt,
-		},
-	}
-	L1 *Loot = &Loot{
-		CrystalizedJelly,
-		0.1,
-	}
-	L2 *Loot = &Loot{
-		GreenBlob,
-		0.25,
-	}
-	SlimeTPL MonsterTemplate = MonsterTemplate{
-		Txtr:          slimeTxt,
-		Lvl:           1,
-		HP:            25,
-		LoS:           128,
-		Size:          32,
-		LvlVariance:   0.3,
-		ScalingFactor: 0.6,
-		Loot:          [8]*Loot{L1, L2},
-	}
-)
-
-type InteractionHandlers struct {
-	OnCollDmg   uint16
-	OnCollPush  *Vector2d
-	OnCollEvent Event
-	OnPickUp    Event
-	OnActDmg    uint16
-
-	OnActPush    *Vector2d
-	OnActEvent   Event
-	DialogScript []string
-	DoorTo       *Scene
-}
-
-type Solid struct {
-	Velocity  *Vector2d
-	Position  *sdl.Rect
-	Source    *sdl.Rect
-	Facing    Facing
-	Anim      *Animation
-	Handlers  *InteractionHandlers
-	Txt       *sdl.Texture
-	Ttl       int64
-	Collision uint8
-
-	// AI RELATED
-	CPattern uint32
-	MPattern []Movement
-	Chase    *Solid
-	CharPtr  *Char
-	LoS      int32
-}
-
-type Animation struct {
-	Action   [8]*sdl.Rect
-	Pose     uint8
-	PoseTick uint32
-	PlayMode uint8
-}
-
-type Movement struct {
-	Orientation Vector2d
-	Ticks       uint8
-}
-
-type PowerUp struct {
-	Code        uint8
-	Name        string
-	Description string
-	Ico         *sdl.Rect
-	IcoTxt      *sdl.Texture
-}
-
-type Char struct {
-	Solid     *Solid
-	Buffs     []*PowerUp
-	Speed     int32
-	Lvl       uint8
-	CurrentXP uint16
-	NextLvlXP uint16
-	CurrentHP uint16
-	MaxHP     uint16
-	CurrentST uint16
-	MaxST     uint16
-	Drop      *Item
-}
-
-type Facing struct {
-	Orientation Vector2d
-
-	Up        [8]*sdl.Rect
-	Down      [8]*sdl.Rect
-	Left      [8]*sdl.Rect
-	Right     [8]*sdl.Rect
-	DownLeft  [8]*sdl.Rect
-	DownRight [8]*sdl.Rect
-	UpLeft    [8]*sdl.Rect
-	UpRight   [8]*sdl.Rect
-	PushBack  [8]*sdl.Rect
-}
-
-type TextEl struct {
-	Font         *ttf.Font
-	Content      string
-	Color        sdl.Color
-	BakedContent string
-}
-
-type DBox struct {
-	SPos     uint8
-	CurrText uint8
-	Text     []*TextEl
-	BGColor  sdl.Color
-	Char     *Char
-}
-
-func (db *DBox) LoadText(content []string) {
-	db.Text = make([]*TextEl, len(content))
-	for i, s := range content {
-		db.Text[i] = &TextEl{
-			Font:    font,
-			Content: s,
-			Color:   sdl.Color{255, 255, 255, 255},
-		}
-	}
-}
-
-func (db *DBox) Present(renderer *sdl.Renderer) {
-
-	if len(db.Text) == 0 {
-		return
-	}
-
-	ct := db.Text[db.CurrText]
-	txtr, w, h := ct.Bake(renderer)
-	br := &sdl.Rect{64, winHeight - 128, 512, 120}
-	tr := &sdl.Rect{0, 0, w, h}
-	bt := &sdl.Rect{64, winHeight - 128, w, h}
-
-	renderer.SetDrawColor(db.BGColor.R, db.BGColor.G, db.BGColor.B, db.BGColor.A)
-	renderer.FillRect(br)
-	renderer.Copy(txtr, tr, bt)
-}
-
-func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
-	return &sdl.Rect{
-		source.X + (facing.X * tSz),
-		source.Y + (facing.Y * tSz),
-		source.W,
-		source.H,
-	}
-}
-
 var (
 	winTitle     string = "Go-SDL2 Obj0"
 	event        sdl.Event
@@ -453,6 +234,234 @@ var (
 	GUI         []*sdl.Rect
 	CullMap     []*Solid
 )
+
+type Vector2d struct {
+	X int32
+	Y int32
+}
+
+type Scene struct {
+	codename   string
+	TileSet    *sdl.Texture
+	CellsX     int32
+	CellsY     int32
+	StartPoint Vector2d
+	CamPoint   Vector2d
+	tileA      *sdl.Rect
+	tileB      *sdl.Rect
+}
+
+type Camera struct {
+	P   Vector2d
+	DZx int32
+	DZy int32
+}
+
+type Event func(source *Solid, subject *Solid)
+
+type Item struct {
+	Name        string
+	Description string
+	Weight      float32
+	BaseValue   uint16
+	Txtr        *sdl.Texture
+	Source      *sdl.Rect
+}
+
+type ItemInstance struct {
+	ItemTpl *Item
+	Solid   *Solid
+}
+
+type ItemStack struct {
+	ItemTpl *Item
+	Qty     int
+}
+
+type Loot struct {
+	Item *Item
+	Perc float32
+}
+
+type MonsterTemplate struct {
+	Txtr          *sdl.Texture
+	Lvl           uint8
+	HP            uint16
+	Size          int32
+	LvlVariance   float32
+	ScalingFactor float32
+	LoS           int32
+	Loot          [8]*Loot
+}
+
+var (
+	GreenBlob *Item = &Item{
+		Name:        "Green Blob",
+		Description: "A chunck of slime.",
+		Txtr:        powerupsTxt,
+		Source:      &sdl.Rect{0, 0, 24, 24},
+	}
+	CrystalizedJelly *Item = &Item{
+		Name:        "Green Blob",
+		Description: "Some believe that the Slime's soul live within it",
+		Txtr:        powerupsTxt,
+		Source:      &sdl.Rect{0, 0, 24, 24},
+		Weight:      2,
+		BaseValue:   10,
+	}
+	L1 *Loot = &Loot{
+		CrystalizedJelly,
+		0.1,
+	}
+	L2 *Loot = &Loot{
+		GreenBlob,
+		0.25,
+	}
+	SlimeTPL MonsterTemplate = MonsterTemplate{
+		Txtr:          slimeTxt,
+		Lvl:           1,
+		HP:            25,
+		LoS:           128,
+		Size:          32,
+		LvlVariance:   0.3,
+		ScalingFactor: 0.6,
+		Loot:          [8]*Loot{L1, L2},
+	}
+)
+
+type InteractionHandlers struct {
+	OnCollDmg   uint16
+	OnCollPush  *Vector2d
+	OnCollEvent Event
+	OnPickUp    Event
+	OnActDmg    uint16
+
+	OnActPush    *Vector2d
+	OnActEvent   Event
+	DialogScript []string
+	DoorTo       *Scene
+}
+
+type Solid struct {
+	Velocity  *Vector2d
+	Position  *sdl.Rect
+	Source    *sdl.Rect
+	Facing    Facing
+	Anim      *Animation
+	Handlers  *InteractionHandlers
+	Txt       *sdl.Texture
+	Ttl       int64
+	Collision uint8
+
+	// AI RELATED
+	CPattern uint32
+	MPattern []Movement
+	Chase    *Solid
+	CharPtr  *Char
+	ItemPtr  *Item
+	LoS      int32
+}
+
+type Animation struct {
+	Action   [8]*sdl.Rect
+	Pose     uint8
+	PoseTick uint32
+	PlayMode uint8
+}
+
+type Movement struct {
+	Orientation Vector2d
+	Ticks       uint8
+}
+
+type PowerUp struct {
+	Code        uint8
+	Name        string
+	Description string
+	Ico         *sdl.Rect
+	IcoTxt      *sdl.Texture
+}
+
+type Char struct {
+	Solid     *Solid
+	Buffs     []*PowerUp
+	Speed     int32
+	Lvl       uint8
+	CurrentXP uint16
+	NextLvlXP uint16
+	CurrentHP uint16
+	MaxHP     uint16
+	CurrentST uint16
+	MaxST     uint16
+	Drop      *Item
+	Inventory []*ItemStack
+}
+
+type Facing struct {
+	Orientation Vector2d
+
+	Up        [8]*sdl.Rect
+	Down      [8]*sdl.Rect
+	Left      [8]*sdl.Rect
+	Right     [8]*sdl.Rect
+	DownLeft  [8]*sdl.Rect
+	DownRight [8]*sdl.Rect
+	UpLeft    [8]*sdl.Rect
+	UpRight   [8]*sdl.Rect
+	PushBack  [8]*sdl.Rect
+}
+
+type TextEl struct {
+	Font         *ttf.Font
+	Content      string
+	Color        sdl.Color
+	BakedContent string
+}
+
+type DBox struct {
+	SPos     uint8
+	CurrText uint8
+	Text     []*TextEl
+	BGColor  sdl.Color
+	Char     *Char
+}
+
+func (db *DBox) LoadText(content []string) {
+	db.Text = make([]*TextEl, len(content))
+	for i, s := range content {
+		db.Text[i] = &TextEl{
+			Font:    font,
+			Content: s,
+			Color:   sdl.Color{255, 255, 255, 255},
+		}
+	}
+}
+
+func (db *DBox) Present(renderer *sdl.Renderer) {
+
+	if len(db.Text) == 0 {
+		return
+	}
+
+	ct := db.Text[db.CurrText]
+	txtr, w, h := ct.Bake(renderer)
+	br := &sdl.Rect{64, winHeight - 128, 512, 120}
+	tr := &sdl.Rect{0, 0, w, h}
+	bt := &sdl.Rect{64, winHeight - 128, w, h}
+
+	renderer.SetDrawColor(db.BGColor.R, db.BGColor.G, db.BGColor.B, db.BGColor.A)
+	renderer.FillRect(br)
+	renderer.Copy(txtr, tr, bt)
+}
+
+func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
+	return &sdl.Rect{
+		source.X + (facing.X * tSz),
+		source.Y + (facing.Y * tSz),
+		source.W,
+		source.H,
+	}
+}
 
 func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 	return (r1.X < (r2.X+r2.W) &&
@@ -822,8 +831,8 @@ func (s *Scene) populate(population int) {
 			break
 		case 4:
 
-			absolute_pos.H = 240
-			absolute_pos.W = 240
+			absolute_pos.H = 128
+			absolute_pos.W = 128
 
 			for _, sp2 := range Spawners {
 				if checkCol(absolute_pos, sp2.Position) {
@@ -834,7 +843,7 @@ func (s *Scene) populate(population int) {
 			rand.Seed(int64(time.Now().Nanosecond()))
 			spw := &SpawnPoint{
 				Position:  absolute_pos,
-				Frequency: uint16((rand.Int31n(5) + 10)),
+				Frequency: uint16((rand.Int31n(5) + 5)),
 			}
 			Spawners = append(Spawners, spw)
 			break
@@ -876,14 +885,31 @@ func (s *Scene) populate(population int) {
 }
 
 var (
-	EventTick uint8 = 16
-	AiTick          = 16
+	EventTick uint8 = 8
+	AiTick          = 8
 	dbox      DBox  = DBox{BGColor: sdl.Color{90, 90, 90, 255}}
 )
 
 func PlaceDrop(item *Item, origin *sdl.Rect) {
-	item.Solid.Position = &sdl.Rect{origin.X, origin.Y, item.Solid.Source.W, item.Solid.Source.H}
-	Interactive = append(Interactive, item.Solid)
+	instance := ItemInstance{
+		ItemTpl: item,
+		Solid: &Solid{
+			Txt:    item.Txtr,
+			Source: item.Source,
+			Position: &sdl.Rect{
+				origin.X,
+				origin.Y,
+				item.Source.W,
+				item.Source.H,
+			},
+			Handlers: &InteractionHandlers{
+				OnActEvent: pickUp,
+				OnPickUp:   addToInv,
+			},
+		},
+	}
+
+	Interactive = append(Interactive, instance.Solid)
 }
 
 func (s *Scene) update() {
@@ -946,7 +972,6 @@ func (s *Scene) update() {
 	}
 
 	if EventTick == 0 {
-
 		for _, spw := range Spawners {
 			rand.Seed(int64(time.Now().Nanosecond()))
 			if uint16(rand.Int31n(255)) < spw.Frequency {
@@ -954,12 +979,11 @@ func (s *Scene) update() {
 			}
 		}
 
-		EventTick = 16
+		EventTick = 8
 	}
 	if AiTick == 0 {
 		AiTick = 3
 	}
-
 }
 
 func (s *Solid) LoSCheck() bool {
@@ -1032,10 +1056,22 @@ func (s *Solid) peformPattern(sp int32) {
 }
 
 func pickUp(picker *Solid, item *Solid) {
-	if item.Handlers != nil {
+	if item.Handlers != nil && item.Handlers.OnPickUp != nil {
 		item.Handlers.OnPickUp(picker, item)
 	}
 	item.Destroy()
+}
+
+func addToInv(picker *Solid, item *Solid) {
+	if picker.CharPtr != nil && item.ItemPtr != nil {
+		for _, iStack := range picker.CharPtr.Inventory {
+			if iStack.ItemTpl == item.ItemPtr {
+				iStack.Qty += 1
+				return
+			}
+		}
+		picker.CharPtr.Inventory = append(picker.CharPtr.Inventory, &ItemStack{item.ItemPtr, 1})
+	}
 }
 
 func PlayDialog(listener *Solid, speaker *Solid) {
@@ -1197,10 +1233,11 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.SetDrawColor(190, 190, 0, 255)
 	renderer.FillRect(&sdl.Rect{10, 38, int32(calcPerc(PC.CurrentXP, PC.NextLvlXP)), 4})
 
-	for i, b := range PC.Buffs {
+	for i, stack := range PC.Inventory {
 		pos := sdl.Rect{8 + (int32(i) * 32), 48, 24, 24}
-		renderer.Copy(powerupsTxt, b.Ico, &pos)
+		renderer.Copy(stack.ItemTpl.Txtr, stack.ItemTpl.Source, &pos)
 	}
+
 	for _, el := range GUI {
 		scrPos := worldToScreen(el, Cam)
 		renderer.SetDrawColor(255, 0, 0, 255)
@@ -1336,6 +1373,9 @@ func main() {
 	defer glowTxt.Destroy()
 	defer slimeTxt.Destroy()
 
+	GreenBlob.Txtr = powerupsTxt
+	CrystalizedJelly.Txtr = powerupsTxt
+
 	var running bool = true
 
 	for _, scn := range SCENES {
@@ -1403,17 +1443,6 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 	W := (monsterTpl.Size + sizeMod)
 	H := (monsterTpl.Size + sizeMod)
 
-	var drop = &Item{
-		Name:        "Specialized Green Blob",
-		Description: "A customized chunck of slime.",
-		Solid: &Solid{
-			Source: &sdl.Rect{24, 0, 24, 24},
-			Txt:    powerupsTxt,
-		},
-		Weight:    1,
-		BaseValue: 1,
-	}
-
 	mon := Char{
 		Lvl: lvl,
 		Solid: &Solid{
@@ -1438,7 +1467,7 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 		Speed:     1,
 		CurrentHP: hp,
 		MaxHP:     hp,
-		Drop:      drop,
+		Drop:      GreenBlob,
 	}
 	mon.Solid.SetAnimation(WALK_FRONT_ANIM)
 	mon.Solid.CharPtr = &mon
