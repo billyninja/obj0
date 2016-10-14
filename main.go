@@ -12,19 +12,22 @@ import (
 )
 
 const (
-	winWidth, winHeight int32 = 640, 480
-	tSz                       = 32
-	cY                        = winHeight / tSz
-	cX                        = winWidth / tSz
-	WORLD_CELLS_X             = 500
-	WORLD_CELLS_Y             = 200
-	KEY_ARROW_UP              = 1073741906
-	KEY_ARROW_DOWN            = 1073741905
-	KEY_ARROW_LEFT            = 1073741904
-	KEY_ARROW_RIGHT           = 1073741903
-	KEY_LEFT_SHIT             = 1073742049
-	KEY_SPACE_BAR             = 32 //1073741824 //
-	KEY_C                     = 99
+	TSz                 float32 = 32
+	TSzi                int32   = int32(TSz)
+	winWidth, winHeight int32   = 640, 480
+	cY                          = winHeight / TSzi
+	cX                          = winWidth / TSzi
+	WORLD_CELLS_X               = 500
+	WORLD_CELLS_Y               = 200
+	KEY_ARROW_UP                = 1073741906
+	KEY_ARROW_DOWN              = 1073741905
+	KEY_ARROW_LEFT              = 1073741904
+	KEY_ARROW_RIGHT             = 1073741903
+	KEY_LEFT_SHIT               = 1073742049
+	KEY_SPACE_BAR               = 32 //1073741824 //
+	KEY_C                       = 99
+	AI_TICK_LENGTH              = 4
+	EVENT_TICK_LENGTH           = 6
 )
 
 var (
@@ -40,10 +43,10 @@ var (
 	glowTxt        *sdl.Texture = nil
 	slimeTxt       *sdl.Texture = nil
 
-	GRASS     *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
-	DIRT                = &sdl.Rect{703, 0, tSz, tSz}
-	WALL                = &sdl.Rect{0, 64, tSz, tSz}
-	DOOR                = &sdl.Rect{256, 32, tSz, tSz}
+	GRASS     *sdl.Rect = &sdl.Rect{0, 0, TSzi, TSzi}
+	DIRT                = &sdl.Rect{703, 0, TSzi, TSzi}
+	WALL                = &sdl.Rect{0, 64, TSzi, TSzi}
+	DOOR                = &sdl.Rect{256, 32, TSzi, TSzi}
 	BF_ATK_UP           = &sdl.Rect{72, 24, 24, 24}
 	BF_DEF_UP           = &sdl.Rect{96, 24, 24, 24}
 
@@ -58,39 +61,39 @@ var (
 	F_UR             = Vector2d{1, -1}
 
 	// MAIN CHAR POSES AND ANIMATIONS
-	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, tSz, tSz}
-	MAN_FRONT_N *sdl.Rect = &sdl.Rect{32, 0, tSz, tSz}
-	MAN_FRONT_L *sdl.Rect = &sdl.Rect{64, 0, tSz, tSz}
-	MAN_LEFT_R  *sdl.Rect = &sdl.Rect{0, 32, tSz, tSz}
-	MAN_LEFT_N  *sdl.Rect = &sdl.Rect{32, 32, tSz, tSz}
-	MAN_LEFT_L  *sdl.Rect = &sdl.Rect{64, 32, tSz, tSz}
-	MAN_RIGHT_R *sdl.Rect = &sdl.Rect{0, 64, tSz, tSz}
-	MAN_RIGHT_N *sdl.Rect = &sdl.Rect{32, 64, tSz, tSz}
-	MAN_RIGHT_L *sdl.Rect = &sdl.Rect{64, 64, tSz, tSz}
-	MAN_BACK_R  *sdl.Rect = &sdl.Rect{0, 96, tSz, tSz}
-	MAN_BACK_N  *sdl.Rect = &sdl.Rect{32, 96, tSz, tSz}
-	MAN_BACK_L  *sdl.Rect = &sdl.Rect{64, 96, tSz, tSz}
-	MAN_UL_R    *sdl.Rect = &sdl.Rect{96, 32, tSz, tSz}
-	MAN_UL_N    *sdl.Rect = &sdl.Rect{128, 32, tSz, tSz}
-	MAN_UL_L    *sdl.Rect = &sdl.Rect{160, 32, tSz, tSz}
-	MAN_UR_R    *sdl.Rect = &sdl.Rect{96, 96, tSz, tSz}
-	MAN_UR_N    *sdl.Rect = &sdl.Rect{128, 96, tSz, tSz}
-	MAN_UR_L    *sdl.Rect = &sdl.Rect{160, 96, tSz, tSz}
-	MAN_DL_R    *sdl.Rect = &sdl.Rect{96, 0, tSz, tSz}
-	MAN_DL_N    *sdl.Rect = &sdl.Rect{128, 0, tSz, tSz}
-	MAN_DL_L    *sdl.Rect = &sdl.Rect{160, 0, tSz, tSz}
-	MAN_DR_R    *sdl.Rect = &sdl.Rect{96, 64, tSz, tSz}
-	MAN_DR_N    *sdl.Rect = &sdl.Rect{128, 64, tSz, tSz}
-	MAN_DR_L    *sdl.Rect = &sdl.Rect{160, 64, tSz, tSz}
+	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, TSzi, TSzi}
+	MAN_FRONT_N *sdl.Rect = &sdl.Rect{32, 0, TSzi, TSzi}
+	MAN_FRONT_L *sdl.Rect = &sdl.Rect{64, 0, TSzi, TSzi}
+	MAN_LEFT_R  *sdl.Rect = &sdl.Rect{0, 32, TSzi, TSzi}
+	MAN_LEFT_N  *sdl.Rect = &sdl.Rect{32, 32, TSzi, TSzi}
+	MAN_LEFT_L  *sdl.Rect = &sdl.Rect{64, 32, TSzi, TSzi}
+	MAN_RIGHT_R *sdl.Rect = &sdl.Rect{0, 64, TSzi, TSzi}
+	MAN_RIGHT_N *sdl.Rect = &sdl.Rect{32, 64, TSzi, TSzi}
+	MAN_RIGHT_L *sdl.Rect = &sdl.Rect{64, 64, TSzi, TSzi}
+	MAN_BACK_R  *sdl.Rect = &sdl.Rect{0, 96, TSzi, TSzi}
+	MAN_BACK_N  *sdl.Rect = &sdl.Rect{32, 96, TSzi, TSzi}
+	MAN_BACK_L  *sdl.Rect = &sdl.Rect{64, 96, TSzi, TSzi}
+	MAN_UL_R    *sdl.Rect = &sdl.Rect{96, 32, TSzi, TSzi}
+	MAN_UL_N    *sdl.Rect = &sdl.Rect{128, 32, TSzi, TSzi}
+	MAN_UL_L    *sdl.Rect = &sdl.Rect{160, 32, TSzi, TSzi}
+	MAN_UR_R    *sdl.Rect = &sdl.Rect{96, 96, TSzi, TSzi}
+	MAN_UR_N    *sdl.Rect = &sdl.Rect{128, 96, TSzi, TSzi}
+	MAN_UR_L    *sdl.Rect = &sdl.Rect{160, 96, TSzi, TSzi}
+	MAN_DL_R    *sdl.Rect = &sdl.Rect{96, 0, TSzi, TSzi}
+	MAN_DL_N    *sdl.Rect = &sdl.Rect{128, 0, TSzi, TSzi}
+	MAN_DL_L    *sdl.Rect = &sdl.Rect{160, 0, TSzi, TSzi}
+	MAN_DR_R    *sdl.Rect = &sdl.Rect{96, 64, TSzi, TSzi}
+	MAN_DR_N    *sdl.Rect = &sdl.Rect{128, 64, TSzi, TSzi}
+	MAN_DR_L    *sdl.Rect = &sdl.Rect{160, 64, TSzi, TSzi}
 
-	MAN_PB_S1 *sdl.Rect = &sdl.Rect{96, 160, tSz, tSz}
-	MAN_PB_S2 *sdl.Rect = &sdl.Rect{128, 160, tSz, tSz}
-	MAN_PB_S3 *sdl.Rect = &sdl.Rect{160, 160, tSz, tSz}
+	MAN_PB_S1 *sdl.Rect = &sdl.Rect{96, 160, TSzi, TSzi}
+	MAN_PB_S2 *sdl.Rect = &sdl.Rect{128, 160, TSzi, TSzi}
+	MAN_PB_S3 *sdl.Rect = &sdl.Rect{160, 160, TSzi, TSzi}
 
-	MAN_CS_S1 *sdl.Rect = &sdl.Rect{192, 224, tSz, tSz}
-	MAN_CS_S2 *sdl.Rect = &sdl.Rect{224, 224, tSz, tSz}
-	MAN_CS_S3 *sdl.Rect = &sdl.Rect{256, 224, tSz, tSz}
-	MAN_CS_S4 *sdl.Rect = &sdl.Rect{224, 192, tSz, tSz}
+	MAN_CS_S1 *sdl.Rect = &sdl.Rect{192, 224, TSzi, TSzi}
+	MAN_CS_S2 *sdl.Rect = &sdl.Rect{224, 224, TSzi, TSzi}
+	MAN_CS_S3 *sdl.Rect = &sdl.Rect{256, 224, TSzi, TSzi}
+	MAN_CS_S4 *sdl.Rect = &sdl.Rect{224, 192, TSzi, TSzi}
 
 	MAN_WALK_DL    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DL_N, MAN_DL_L, MAN_DL_N, MAN_DL_R}
 	MAN_WALK_DR    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DR_N, MAN_DR_L, MAN_DR_N, MAN_DR_R}
@@ -103,22 +106,22 @@ var (
 	MAN_PUSH_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_PB_S1, MAN_PB_S2, MAN_PB_S3}
 	MAN_CAST       [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S1, MAN_CS_S2, MAN_CS_S3, MAN_CS_S4}
 
-	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, tSz, tSz}
-	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, tSz, tSz}
-	LAVA_S3 *sdl.Rect = &sdl.Rect{256, 0, tSz, tSz}
+	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, TSzi, TSzi}
+	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, TSzi, TSzi}
+	LAVA_S3 *sdl.Rect = &sdl.Rect{256, 0, TSzi, TSzi}
 
 	LAVA_A [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
 
-	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, tSz * 2, tSz * 2}
-	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, tSz * 2, tSz * 2}
-	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, tSz * 2, tSz * 2}
+	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, TSzi * 2, TSzi * 2}
+	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, TSzi * 2, TSzi * 2}
+	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, TSzi * 2, TSzi * 2}
 
 	YGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{YGLOW_S1, YGLOW_S2, YGLOW_S3, YGLOW_S2}
 
-	BGLOW_S1 *sdl.Rect = &sdl.Rect{224, 224, tSz, tSz}
-	BGLOW_S2 *sdl.Rect = &sdl.Rect{256, 224, tSz, tSz}
-	BGLOW_S3 *sdl.Rect = &sdl.Rect{288, 224, tSz, tSz}
-	BGLOW_S4 *sdl.Rect = &sdl.Rect{320, 224, tSz, tSz}
+	BGLOW_S1 *sdl.Rect = &sdl.Rect{224, 224, TSzi, TSzi}
+	BGLOW_S2 *sdl.Rect = &sdl.Rect{256, 224, TSzi, TSzi}
+	BGLOW_S3 *sdl.Rect = &sdl.Rect{288, 224, TSzi, TSzi}
+	BGLOW_S4 *sdl.Rect = &sdl.Rect{320, 224, TSzi, TSzi}
 
 	BGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{BGLOW_S1, BGLOW_S2, BGLOW_S3, BGLOW_S4, BGLOW_S3, BGLOW_S2}
 
@@ -219,7 +222,8 @@ var (
 		CurrentXP: 0,
 		NextLvlXP: 100,
 		Buffs:     []*PowerUp{ATK_UP, DEF_UP},
-		Speed:     1,
+		BaseSpeed: 1.5,
+		Speed:     1.5,
 		CurrentHP: 220,
 		MaxHP:     250,
 		CurrentST: 65,
@@ -236,8 +240,8 @@ var (
 )
 
 type Vector2d struct {
-	X int32
-	Y int32
+	X float32
+	Y float32
 }
 
 type Scene struct {
@@ -286,12 +290,12 @@ type Loot struct {
 type MonsterTemplate struct {
 	Txtr          *sdl.Texture
 	Lvl           uint8
-	HP            uint16
+	HP            float32
 	Size          int32
 	LvlVariance   float32
 	ScalingFactor float32
 	LoS           int32
-	Loot          [8]*Loot
+	Loot          [8]Loot
 }
 
 var (
@@ -309,28 +313,24 @@ var (
 		Weight:      2,
 		BaseValue:   10,
 	}
-	L1 *Loot = &Loot{
-		CrystalizedJelly,
-		0.1,
-	}
-	L2 *Loot = &Loot{
-		GreenBlob,
-		0.25,
-	}
+
 	SlimeTPL MonsterTemplate = MonsterTemplate{
 		Txtr:          slimeTxt,
 		Lvl:           1,
 		HP:            25,
-		LoS:           128,
+		LoS:           90,
 		Size:          32,
 		LvlVariance:   0.3,
 		ScalingFactor: 0.6,
-		Loot:          [8]*Loot{L1, L2},
+		Loot: [8]Loot{
+			{CrystalizedJelly, 0.1},
+			{GreenBlob, 0.25},
+		},
 	}
 )
 
 type InteractionHandlers struct {
-	OnCollDmg   uint16
+	OnCollDmg   float32
 	OnCollPush  *Vector2d
 	OnCollEvent Event
 	OnPickUp    Event
@@ -385,14 +385,15 @@ type PowerUp struct {
 type Char struct {
 	Solid     *Solid
 	Buffs     []*PowerUp
-	Speed     int32
+	BaseSpeed float32
+	Speed     float32
 	Lvl       uint8
 	CurrentXP uint16
 	NextLvlXP uint16
-	CurrentHP uint16
-	MaxHP     uint16
-	CurrentST uint16
-	MaxST     uint16
+	CurrentHP float32
+	MaxHP     float32
+	CurrentST float32
+	MaxST     float32
 	Drop      *Item
 	Inventory []*ItemStack
 }
@@ -456,8 +457,8 @@ func (db *DBox) Present(renderer *sdl.Renderer) {
 
 func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
 	return &sdl.Rect{
-		source.X + (facing.X * tSz),
-		source.Y + (facing.Y * tSz),
+		source.X + int32(facing.X*TSz),
+		source.Y + int32(facing.Y*TSz),
 		source.W,
 		source.H,
 	}
@@ -499,7 +500,7 @@ func onColHdk(hdk *Solid, tgt *Solid) {
 		tgt.CharPtr.depletHP(hdk.Handlers.OnCollDmg)
 	}
 	sol := &Solid{
-		Position: &sdl.Rect{hdk.Position.X, hdk.Position.Y, tSz, tSz},
+		Position: &sdl.Rect{hdk.Position.X, hdk.Position.Y, TSzi, TSzi},
 		Txt:      glowTxt,
 		Anim: &Animation{
 			Action:   YGLOW_A,
@@ -516,7 +517,8 @@ func onColHdk(hdk *Solid, tgt *Solid) {
 }
 
 func (c *Char) peformHaduken() {
-	var stCost uint16 = 8
+
+	var stCost float32 = 8
 
 	if stCost > c.CurrentST {
 		return
@@ -569,7 +571,7 @@ func handleKeyEvent(key sdl.Keycode) Vector2d {
 		}
 		return N
 	case KEY_LEFT_SHIT:
-		PC.Speed = 2
+		PC.Speed = (PC.BaseSpeed * 2)
 	case KEY_ARROW_UP:
 		return F_UP
 	case KEY_ARROW_DOWN:
@@ -588,7 +590,7 @@ func handleKeyUpEvent(key sdl.Keycode) {
 	case KEY_C:
 		PC.peformHaduken()
 	case KEY_LEFT_SHIT:
-		PC.Speed = 1
+		PC.Speed = PC.BaseSpeed
 	case KEY_ARROW_UP:
 		PC.Solid.Velocity.Y = 0
 	case KEY_ARROW_DOWN:
@@ -623,17 +625,17 @@ func (s *Solid) PlayAnimation() {
 	}
 }
 
-func (s *Solid) procMovement(speed int32) {
+func (s *Solid) procMovement(speed float32) {
 	np := &sdl.Rect{
-		(s.Position.X + (s.Velocity.X * speed)),
-		(s.Position.Y + (s.Velocity.Y * speed)),
+		(s.Position.X + int32(s.Velocity.X*speed)),
+		(s.Position.Y + int32(s.Velocity.Y*speed)),
 		s.Position.W,
 		s.Position.H,
 	}
 	var outbound bool = (np.X <= 0 ||
 		np.Y <= 0 ||
-		np.X > int32(scene.CellsX*tSz) ||
-		np.Y > int32(scene.CellsY*tSz))
+		np.X > int32(scene.CellsX*TSzi) ||
+		np.Y > int32(scene.CellsY*TSzi))
 
 	if (np.X == s.Position.X && np.Y == s.Position.Y) || outbound {
 		return
@@ -694,33 +696,35 @@ func catchEvents() bool {
 
 		newScreenPos := worldToScreen(PC.Solid.Position, Cam)
 		if (Cam.DZx - newScreenPos.X) > 0 {
-			Cam.P.X -= (Cam.DZx - newScreenPos.X)
+			Cam.P.X -= float32(Cam.DZx - newScreenPos.X)
 		}
 
-		if (winWidth - Cam.DZx) < (newScreenPos.X + tSz) {
-			Cam.P.X += (newScreenPos.X + tSz) - (winWidth - Cam.DZx)
+		if (winWidth - Cam.DZx) < (newScreenPos.X + TSzi) {
+			Cam.P.X += float32((newScreenPos.X + TSzi) - (winWidth - Cam.DZx))
 		}
 
 		if (Cam.DZy - newScreenPos.Y) > 0 {
-			Cam.P.Y -= (Cam.DZy - newScreenPos.Y)
+			Cam.P.Y -= float32(Cam.DZy - newScreenPos.Y)
 		}
 
-		if (winHeight - Cam.DZy) < (newScreenPos.Y + tSz) {
-			Cam.P.Y += (newScreenPos.Y + tSz) - (winHeight - Cam.DZy)
+		if (winHeight - Cam.DZy) < (newScreenPos.Y + TSzi) {
+			Cam.P.Y += float32((newScreenPos.Y + TSzi) - (winHeight - Cam.DZy))
 		}
 	}
-	if time.Now().Nanosecond()%2 == 1 {
-		if isMoving(PC.Solid.Velocity) && PC.Speed > 1 {
-			if PC.CurrentST <= uint16(PC.Speed) {
-				PC.CurrentST = 0
-				PC.Speed = 1
-			} else {
-				PC.CurrentST -= 1
-			}
+
+	if isMoving(PC.Solid.Velocity) && PC.Speed > PC.BaseSpeed {
+		dpl := (PC.MaxST * 0.04)
+
+		if PC.CurrentST <= dpl {
+			PC.CurrentST = 0
+			PC.Speed = PC.BaseSpeed
 		} else {
-			if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
-				PC.CurrentST += 2
-			}
+			PC.CurrentST -= dpl
+		}
+
+	} else {
+		if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
+			PC.CurrentST += (PC.MaxST * 0.04)
 		}
 	}
 
@@ -777,7 +781,7 @@ func (s *Scene) populate(population int) {
 		cX := rand.Int31n(s.CellsX)
 		cY := rand.Int31n(s.CellsY)
 
-		absolute_pos := &sdl.Rect{cX * tSz, cY * tSz, tSz, tSz}
+		absolute_pos := &sdl.Rect{cX * TSzi, cY * TSzi, TSzi, TSzi}
 		obj_type := rand.Int31n(10)
 		sol := &Solid{}
 
@@ -885,8 +889,8 @@ func (s *Scene) populate(population int) {
 }
 
 var (
-	EventTick uint8 = 8
-	AiTick          = 8
+	EventTick uint8 = EVENT_TICK_LENGTH
+	AiTick          = AI_TICK_LENGTH
 	dbox      DBox  = DBox{BGColor: sdl.Color{90, 90, 90, 255}}
 )
 
@@ -947,7 +951,7 @@ func (s *Scene) update() {
 		}
 
 		if len(dbox.Text) > 0 {
-			AiTick = 16
+			AiTick = AI_TICK_LENGTH
 			return
 		}
 
@@ -980,10 +984,10 @@ func (s *Scene) update() {
 			}
 		}
 
-		EventTick = 8
+		EventTick = EVENT_TICK_LENGTH
 	}
 	if AiTick == 0 {
-		AiTick = 3
+		AiTick = AI_TICK_LENGTH
 	}
 }
 
@@ -1008,18 +1012,18 @@ func (s *Solid) chase() {
 	diffX := math.Abs(float64(s.Position.X - s.Chase.Position.X))
 	diffY := math.Abs(float64(s.Position.Y - s.Chase.Position.Y))
 
-	if diffX > 12 && s.Position.X > s.Chase.Position.X {
+	if diffX > 24 && s.Position.X > s.Chase.Position.X {
 		s.Velocity.X = -1
 	}
 
-	if diffX > 12 && s.Position.X < s.Chase.Position.X {
+	if diffX > 24 && s.Position.X < s.Chase.Position.X {
 		s.Velocity.X = 1
 	}
-	if diffY > 12 && s.Position.Y > s.Chase.Position.Y {
+	if diffY > 24 && s.Position.Y > s.Chase.Position.Y {
 		s.Velocity.Y = -1
 	}
 
-	if diffY > 12 && s.Position.Y < s.Chase.Position.Y {
+	if diffY > 24 && s.Position.Y < s.Chase.Position.Y {
 		s.Velocity.Y = 1
 	}
 
@@ -1028,7 +1032,7 @@ func (s *Solid) chase() {
 	return
 }
 
-func (s *Solid) peformPattern(sp int32) {
+func (s *Solid) peformPattern(sp float32) {
 	anon := func(c uint32, mvs []Movement) *Movement {
 		var sum uint32 = 0
 		for _, mp := range mvs {
@@ -1113,9 +1117,9 @@ func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
 	return F_DOWN, f.Down
 }
 
-func applyMov(p *sdl.Rect, o Vector2d, s int32) {
-	p.X += o.X * s
-	p.Y += o.Y * s
+func applyMov(p *sdl.Rect, o Vector2d, s float32) {
+	p.X += int32(o.X * s)
+	p.Y += int32(o.Y * s)
 }
 
 func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
@@ -1130,16 +1134,16 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 		Cam.P.Y = 0
 	}
 
-	var offsetX, offsetY int32 = tSz, tSz
+	var offsetX, offsetY int32 = TSzi, TSzi
 	// Rendering the terrain
 	for winY := init; winY < winHeight; winY += offsetY {
 		for winX := init; winX < winWidth; winX += offsetX {
 
-			offsetX = (tSz - ((Cam.P.X + winX) % tSz))
-			offsetY = (tSz - ((Cam.P.Y + winY) % tSz))
+			offsetX = (TSzi - (int32(Cam.P.X)+winX)%TSzi)
+			offsetY = (TSzi - (int32(Cam.P.Y)+winY)%TSzi)
 
-			worldCellX := uint16((Cam.P.X + winX) / tSz)
-			worldCellY := uint16((Cam.P.Y + winY) / tSz)
+			worldCellX := uint16((int32(Cam.P.X) + winX) / TSzi)
+			worldCellY := uint16((int32(Cam.P.Y) + winY) / TSzi)
 			screenPos := sdl.Rect{winX, winY, offsetX, offsetY}
 
 			if worldCellX > uint16(s.CellsX) || worldCellY > uint16(s.CellsY) || worldCellX < 0 || worldCellY < 0 {
@@ -1148,8 +1152,8 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 
 			gfx := World[worldCellX][worldCellY]
 
-			if offsetX != int32(tSz) || offsetY != int32(tSz) {
-				Source = &sdl.Rect{gfx.X + (tSz - offsetX), gfx.Y + (tSz - offsetY), offsetX, offsetY}
+			if offsetX != TSzi || offsetY != TSzi {
+				Source = &sdl.Rect{gfx.X + (TSzi - offsetX), gfx.Y + (TSzi - offsetY), offsetX, offsetY}
 			} else {
 				Source = gfx
 			}
@@ -1180,6 +1184,9 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 
 		scrPos := worldToScreen(obj.Position, Cam)
 
+		renderer.SetDrawColor(0, 255, 0, 255)
+		renderer.DrawRect(scrPos)
+
 		if inScreen(scrPos) {
 			var src *sdl.Rect
 			if obj.Anim != nil {
@@ -1200,6 +1207,9 @@ func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 			continue
 		}
 		scrPos := worldToScreen(mon.Solid.Position, Cam)
+
+		renderer.SetDrawColor(255, 255, 0, 255)
+		renderer.DrawRect(scrPos)
 
 		if inScreen(scrPos) {
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
@@ -1232,10 +1242,9 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.SetDrawColor(90, 90, 0, 255)
 	renderer.FillRect(&sdl.Rect{10, 38, 100, 4})
 	renderer.SetDrawColor(190, 190, 0, 255)
-	renderer.FillRect(&sdl.Rect{10, 38, int32(calcPerc(PC.CurrentXP, PC.NextLvlXP)), 4})
+	renderer.FillRect(&sdl.Rect{10, 38, int32(calcPerc(float32(PC.CurrentXP), float32(PC.NextLvlXP))), 4})
 
 	for i, stack := range PC.Inventory {
-		//println(">>>", i, stack.ItemTpl.Name, stack.Qty)
 		counter := TextEl{
 			Content: string(stack.Qty),
 			Font:    font,
@@ -1266,22 +1275,9 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 
 	dbg_content := fmt.Sprintf(
 		"px %d py %d|vx %d vy %d (%d, %d) An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
-		PC.Solid.Position.X,
-		PC.Solid.Position.Y,
-		PC.Solid.Velocity.X,
-		PC.Solid.Velocity.Y,
-		PC.Solid.Facing.Orientation.X,
-		PC.Solid.Facing.Orientation.Y,
-		PC.Solid.Anim.Pose,
-		PC.Solid.Anim.PoseTick,
-		PC.Solid.Anim.PlayMode,
-		len(CullMap),
-		len(Interactive),
-		Cam.P.X,
-		Cam.P.Y,
-		game_latency,
-		EventTick,
-		AiTick,
+		PC.Solid.Position.X, PC.Solid.Position.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Facing.Orientation.X,
+		PC.Solid.Facing.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
+		len(Interactive), Cam.P.X, Cam.P.Y, game_latency, EventTick, AiTick,
 	)
 	dbg_TextEl := TextEl{
 		Font:    font,
@@ -1313,19 +1309,23 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 	renderer.Present()
 }
 
-func calcPerc(v1 uint16, v2 uint16) float32 {
+func calcPerc(v1 float32, v2 float32) float32 {
 	return (float32(v1) / float32(v2) * 100)
 }
 
 func worldToScreen(pos *sdl.Rect, cam Camera) *sdl.Rect {
-	return &sdl.Rect{(pos.X - cam.P.X), (pos.Y - cam.P.Y), pos.W, pos.H}
+	return &sdl.Rect{
+		(pos.X - int32(cam.P.X)),
+		(pos.Y - int32(cam.P.Y)),
+		pos.W, pos.H,
+	}
 }
 
 func inScreen(r *sdl.Rect) bool {
 	return (r.X > (r.W*-1) && r.X < winWidth && r.Y > (r.H*-1) && r.Y < winHeight)
 }
 
-func (ch *Char) depletHP(dmg uint16) {
+func (ch *Char) depletHP(dmg float32) {
 	if dmg > ch.CurrentHP {
 		ch.CurrentHP = 0
 	} else {
@@ -1334,10 +1334,10 @@ func (ch *Char) depletHP(dmg uint16) {
 	ch.PushBack(8)
 }
 
-func (c *Char) PushBack(d int32) {
+func (c *Char) PushBack(d float32) {
 	f := c.Solid.Facing.Orientation
-	c.Solid.Position.X -= f.X * d * 4
-	c.Solid.Position.Y -= f.Y * d * 4
+	c.Solid.Position.X -= int32(f.X * d * 4)
+	c.Solid.Position.Y -= int32(f.Y * d * 4)
 	if c.Solid.Facing.PushBack[0] != nil {
 		c.Solid.SetAnimation(MAN_PB_ANIM)
 	}
@@ -1413,7 +1413,7 @@ func main() {
 }
 
 func V2R(v Vector2d, w int32, h int32) *sdl.Rect {
-	return &sdl.Rect{v.X, v.Y, w, h}
+	return &sdl.Rect{int32(v.X), int32(v.Y), w, h}
 }
 
 func change_scene(new_scene *Scene, staring_pos *Vector2d) {
@@ -1422,7 +1422,7 @@ func change_scene(new_scene *Scene, staring_pos *Vector2d) {
 	new_scene.populate(200)
 	scene = new_scene
 
-	PC.Solid.Position = V2R(new_scene.StartPoint, tSz, tSz)
+	PC.Solid.Position = V2R(new_scene.StartPoint, TSzi, TSzi)
 	Cam.P = new_scene.CamPoint
 }
 
@@ -1438,8 +1438,8 @@ type SpawnPoint struct {
 }
 
 func (sp *SpawnPoint) Produce() {
-	px := rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X
-	py := rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y
+	px := float32(rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X)
+	py := float32(rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y)
 
 	mon := MonsterFactory(&SlimeTPL, sp.LvlMod, Vector2d{px, py})
 
@@ -1450,7 +1450,7 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 
 	variance := uint8(math.Floor(float64(rand.Float32() * monsterTpl.LvlVariance * 100)))
 	lvl := uint8((monsterTpl.Lvl + lvlMod) + variance)
-	hp := monsterTpl.HP + uint16(lvl*2)
+	hp := monsterTpl.HP + float32(lvl*2)
 	sizeMod := int32(float32(lvl-monsterTpl.Lvl) * monsterTpl.ScalingFactor)
 	W := (monsterTpl.Size + sizeMod)
 	H := (monsterTpl.Size + sizeMod)
@@ -1458,7 +1458,7 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 	mon := Char{
 		Lvl: lvl,
 		Solid: &Solid{
-			Position:  &sdl.Rect{pos.X, pos.Y, W, H},
+			Position:  &sdl.Rect{int32(pos.X), int32(pos.Y), W, H},
 			Velocity:  &Vector2d{0, 0},
 			Txt:       monsterTpl.Txtr,
 			Collision: 2,
@@ -1477,6 +1477,7 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 			Chase: PC.Solid,
 		},
 		Speed:     1,
+		BaseSpeed: 1,
 		CurrentHP: hp,
 		MaxHP:     hp,
 		Drop:      GreenBlob,
