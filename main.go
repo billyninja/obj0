@@ -894,8 +894,9 @@ func PlaceDrop(item *Item, origin *sdl.Rect) {
 	instance := ItemInstance{
 		ItemTpl: item,
 		Solid: &Solid{
-			Txt:    item.Txtr,
-			Source: item.Source,
+			ItemPtr: item,
+			Txt:     item.Txtr,
+			Source:  item.Source,
 			Position: &sdl.Rect{
 				origin.X,
 				origin.Y,
@@ -1234,8 +1235,10 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.FillRect(&sdl.Rect{10, 38, int32(calcPerc(PC.CurrentXP, PC.NextLvlXP)), 4})
 
 	for i, stack := range PC.Inventory {
+		println(">>>", i, stack.ItemTpl.Name, stack.Qty)
 		pos := sdl.Rect{8 + (int32(i) * 32), 48, 24, 24}
 		renderer.Copy(stack.ItemTpl.Txtr, stack.ItemTpl.Source, &pos)
+		renderer.DrawRect(&pos)
 	}
 
 	for _, el := range GUI {
