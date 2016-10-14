@@ -226,8 +226,9 @@ var (
 		Speed:     1.5,
 		CurrentHP: 220,
 		MaxHP:     250,
-		CurrentST: 65,
+		CurrentST: 250,
 		MaxST:     300,
+		Inventory: []*ItemStack{{GreenBlob, 2}},
 	}
 
 	scene       *Scene
@@ -306,10 +307,10 @@ var (
 		Source:      &sdl.Rect{0, 0, 24, 24},
 	}
 	CrystalizedJelly *Item = &Item{
-		Name:        "Green Blob",
+		Name:        "Crystalized Jelly",
 		Description: "Some believe that the Slime's soul live within it",
 		Txtr:        powerupsTxt,
-		Source:      &sdl.Rect{0, 0, 24, 24},
+		Source:      &sdl.Rect{24, 0, 24, 24},
 		Weight:      2,
 		BaseValue:   10,
 	}
@@ -323,8 +324,8 @@ var (
 		LvlVariance:   0.3,
 		ScalingFactor: 0.6,
 		Loot: [8]Loot{
-			{CrystalizedJelly, 0.1},
-			{GreenBlob, 0.25},
+			{CrystalizedJelly, 0.5},
+			{GreenBlob, 0.5},
 		},
 	}
 )
@@ -713,7 +714,7 @@ func catchEvents() bool {
 	}
 
 	if isMoving(PC.Solid.Velocity) && PC.Speed > PC.BaseSpeed {
-		dpl := (PC.MaxST * 0.04)
+		dpl := (PC.MaxST * 0.0009)
 
 		if PC.CurrentST <= dpl {
 			PC.CurrentST = 0
@@ -724,7 +725,7 @@ func catchEvents() bool {
 
 	} else {
 		if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
-			PC.CurrentST += (PC.MaxST * 0.04)
+			PC.CurrentST += (PC.MaxST * 0.0009)
 		}
 	}
 
@@ -978,9 +979,14 @@ func (s *Scene) update() {
 
 	if EventTick == 0 {
 		for _, spw := range Spawners {
+			if spw.Frequency == 0 {
+				spw.Frequency += 1
+			}
+
 			rand.Seed(int64(time.Now().Nanosecond()))
 			if uint16(rand.Int31n(255)) < spw.Frequency {
 				spw.Produce()
+				spw.Frequency -= 1
 			}
 		}
 
@@ -1212,10 +1218,17 @@ func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 		renderer.DrawRect(scrPos)
 
 		if inScreen(scrPos) {
+
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
-			renderer.Copy(slimeTxt, src, scrPos)
+
+			renderer.Copy(mon.Solid.Txt, src, scrPos)
 			renderer.DrawRect(scrPos)
 			CullMap = append(CullMap, mon.Solid)
+
+			renderer.SetDrawColor(255, 0, 0, 255)
+			renderer.FillRect(&sdl.Rect{scrPos.X, scrPos.Y - 8, 32, 4})
+			renderer.SetDrawColor(0, 255, 0, 255)
+			renderer.FillRect(&sdl.Rect{scrPos.X, scrPos.Y - 8, int32(32 * calcPerc(mon.CurrentHP, mon.MaxHP) / 100), 4})
 		}
 	}
 }
@@ -1246,17 +1259,19 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 
 	for i, stack := range PC.Inventory {
 		counter := TextEl{
-			Content: string(stack.Qty),
+			Content: fmt.Sprintf("%d", stack.Qty),
 			Font:    font,
 			Color:   sdl.Color{255, 255, 255, 255},
 		}
 
 		counterTxtr, cW, cH := counter.Bake(renderer)
-		pos := sdl.Rect{8 + (int32(i) * 32), 48, 24, 24}
+		pos := sdl.Rect{8 + (int32(i) * 32), 60, 24, 24}
 		renderer.Copy(stack.ItemTpl.Txtr, stack.ItemTpl.Source, &pos)
-
+		pos.Y += (stack.ItemTpl.Source.H + 4)
+		pos.X += 8
+		pos.W = cW
+		pos.H = cH
 		renderer.Copy(counterTxtr, &sdl.Rect{0, 0, cW, cH}, &pos)
-		renderer.DrawRect(&pos)
 	}
 
 	for _, el := range GUI {
@@ -1274,7 +1289,7 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	renderer.Copy(lvl_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{128, 60, W, H})
 
 	dbg_content := fmt.Sprintf(
-		"px %d py %d|vx %d vy %d (%d, %d) An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
+		"px %d py %d|vx %.1f vy %.1f (%.1f, %.1f) An:%d/%d/%d cull %d i %d cX %.1f cY %.1f L %dus ETick%d AiTick%d",
 		PC.Solid.Position.X, PC.Solid.Position.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Facing.Orientation.X,
 		PC.Solid.Facing.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
 		len(Interactive), Cam.P.X, Cam.P.Y, game_latency, EventTick, AiTick,
@@ -1387,6 +1402,7 @@ func main() {
 
 	GreenBlob.Txtr = powerupsTxt
 	CrystalizedJelly.Txtr = powerupsTxt
+	SlimeTPL.Txtr = slimeTxt
 
 	var running bool = true
 
@@ -1404,10 +1420,10 @@ func main() {
 
 		scene.update()
 		scene.render(renderer)
+		running = catchEvents()
 
 		game_latency = (time.Since(then) / time.Microsecond)
 
-		running = catchEvents()
 		sdl.Delay(24)
 	}
 }
@@ -1455,6 +1471,17 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 	W := (monsterTpl.Size + sizeMod)
 	H := (monsterTpl.Size + sizeMod)
 
+	var DropItem *Item
+	var sumP float32
+	R := rand.Float32()
+	for _, l := range monsterTpl.Loot {
+		sumP += l.Perc
+		if R < sumP {
+			DropItem = l.Item
+			break
+		}
+	}
+
 	mon := Char{
 		Lvl: lvl,
 		Solid: &Solid{
@@ -1480,7 +1507,7 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 		BaseSpeed: 1,
 		CurrentHP: hp,
 		MaxHP:     hp,
-		Drop:      GreenBlob,
+		Drop:      DropItem,
 	}
 	mon.Solid.SetAnimation(WALK_FRONT_ANIM)
 	mon.Solid.CharPtr = &mon
