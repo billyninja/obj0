@@ -5,7 +5,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/sdl_image"
 	"github.com/veandco/go-sdl2/sdl_ttf"
-	//	"math"
+	"math"
 	"math/rand"
 	"runtime"
 	"time"
@@ -51,6 +51,69 @@ type Camera struct {
 
 type Event func(source *Solid, subject *Solid)
 
+type Item struct {
+	Name        string
+	Description string
+	Solid       *Solid
+	Weight      uint16
+	BaseValue   uint16
+}
+
+type Loot struct {
+	Item *Item
+	Perc float32
+}
+
+type MonsterTemplate struct {
+	Txtr          *sdl.Texture
+	Lvl           uint8
+	HP            uint16
+	Size          int32
+	LvlVariance   float32
+	ScalingFactor float32
+	LoS           int32
+	Loot          [8]*Loot
+}
+
+var (
+	GreenBlob *Item = &Item{
+		Name:        "Green Blob",
+		Description: "A chunck of slime.",
+		Solid: &Solid{
+			Source: &sdl.Rect{24, 0, 24, 24},
+			Txt:    spritesheetTxt,
+		},
+		Weight:    1,
+		BaseValue: 1,
+	}
+	CrystalizedJelly *Item = &Item{
+		Name:        "Green Blob",
+		Description: "Some believe that the Slime's soul live within it",
+		Solid: &Solid{
+			Source: &sdl.Rect{0, 0, 24, 24},
+			Txt:    powerupsTxt,
+		},
+	}
+	L1 *Loot = &Loot{
+		CrystalizedJelly,
+		0.1,
+	}
+	L2 *Loot = &Loot{
+		GreenBlob,
+		0.25,
+	}
+	SlimeTPL MonsterTemplate = MonsterTemplate{
+		Txtr:          slimeTxt,
+		Lvl:           1,
+		HP:            25,
+		LoS:           128,
+		Size:          32,
+		LvlVariance:   0.3,
+		ScalingFactor: 0.6,
+		Loot:          [8]*Loot{L1, L2},
+	}
+)
+
 type InteractionHandlers struct {
 	OnCollDmg   uint16
 	OnCollPush  *Vector2d
@@ -80,6 +143,7 @@ type Solid struct {
 	MPattern []Movement
 	Chase    *Solid
 	CharPtr  *Char
+	LoS      int32
 }
 
 type Animation struct {
@@ -113,6 +177,7 @@ type Char struct {
 	MaxHP     uint16
 	CurrentST uint16
 	MaxST     uint16
+	Drop      *Item
 }
 
 type Facing struct {
@@ -377,7 +442,7 @@ var (
 		CurrentHP: 220,
 		MaxHP:     250,
 		CurrentST: 65,
-		MaxST:     100,
+		MaxST:     300,
 	}
 
 	scene       *Scene
@@ -442,7 +507,7 @@ func onColHdk(hdk *Solid, tgt *Solid) {
 }
 
 func (c *Char) peformHaduken() {
-	var stCost uint16 = 12
+	var stCost uint16 = 8
 
 	if stCost > c.CurrentST {
 		return
@@ -462,7 +527,7 @@ func (c *Char) peformHaduken() {
 			PoseTick: 16,
 		},
 		Handlers: &InteractionHandlers{
-			OnCollDmg:   12,
+			OnCollDmg:   30,
 			OnCollEvent: onColHdk,
 		},
 		CPattern: 0,
@@ -645,7 +710,7 @@ func catchEvents() bool {
 			}
 		} else {
 			if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
-				PC.CurrentST += 1
+				PC.CurrentST += 2
 			}
 		}
 	}
@@ -756,11 +821,20 @@ func (s *Scene) populate(population int) {
 			Interactive = append(Interactive, sol)
 			break
 		case 4:
+
 			absolute_pos.H = 240
 			absolute_pos.W = 240
+
+			for _, sp2 := range Spawners {
+				if checkCol(absolute_pos, sp2.Position) {
+					return
+				}
+			}
+
+			rand.Seed(int64(time.Now().Nanosecond()))
 			spw := &SpawnPoint{
 				Position:  absolute_pos,
-				Frequency: 10,
+				Frequency: uint16((rand.Int31n(5) + 10)),
 			}
 			Spawners = append(Spawners, spw)
 			break
@@ -807,6 +881,11 @@ var (
 	dbox      DBox  = DBox{BGColor: sdl.Color{90, 90, 90, 255}}
 )
 
+func PlaceDrop(item *Item, origin *sdl.Rect) {
+	item.Solid.Position = &sdl.Rect{origin.X, origin.Y, item.Solid.Source.W, item.Solid.Source.H}
+	Interactive = append(Interactive, item.Solid)
+}
+
 func (s *Scene) update() {
 	EventTick -= 1
 	AiTick -= 1
@@ -816,26 +895,15 @@ func (s *Scene) update() {
 		// Ttl kill
 		if cObj.Ttl > 0 && cObj.Ttl < now {
 			cObj.Destroy()
+			continue
 		}
 
 		// Kill logic
 		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
-			drop := &Solid{
-				Position: cObj.Position,
-				Txt:      powerupsTxt,
-				Source:   BF_ATK_UP,
-				Handlers: &InteractionHandlers{
-					OnActEvent: pickUp,
-					OnPickUp: func(picker *Solid, picked *Solid) {
-						if picker.CharPtr != nil {
-							picker.CharPtr.CurrentST = picker.CharPtr.MaxST
-						}
-					},
-				},
+
+			if cObj.CharPtr.Drop != nil {
+				PlaceDrop(cObj.CharPtr.Drop, cObj.Position)
 			}
-			drop.Position.W = 24
-			drop.Position.H = 24
-			Interactive = append(Interactive, drop)
 
 			cObj.Destroy()
 
@@ -869,7 +937,7 @@ func (s *Scene) update() {
 		}
 
 		if AiTick == 0 {
-			if cObj.Chase != nil && cObj.LoSCheck(32) {
+			if cObj.Chase != nil && cObj.LoSCheck() {
 				cObj.chase()
 			} else {
 				cObj.peformPattern(1)
@@ -877,14 +945,15 @@ func (s *Scene) update() {
 		}
 	}
 
-	for _, spw := range Spawners {
-		if EventTick == 0 {
-			mon := MonsterFactory(spw)
-			Interactive = append(Interactive, mon.Solid)
-		}
-	}
-
 	if EventTick == 0 {
+
+		for _, spw := range Spawners {
+			rand.Seed(int64(time.Now().Nanosecond()))
+			if uint16(rand.Int31n(255)) < spw.Frequency {
+				spw.Produce()
+			}
+		}
+
 		EventTick = 16
 	}
 	if AiTick == 0 {
@@ -893,8 +962,14 @@ func (s *Scene) update() {
 
 }
 
-func (s *Solid) LoSCheck(int32) bool {
-	LoS := &sdl.Rect{s.Position.X - 128, s.Position.Y - 128, s.Position.W + 256, s.Position.H + 256}
+func (s *Solid) LoSCheck() bool {
+	LoS := &sdl.Rect{
+		s.Position.X - s.LoS,
+		s.Position.Y - s.LoS,
+		s.Position.W + (s.LoS * 2),
+		s.Position.H + (s.LoS * 2),
+	}
+
 	if !checkCol(PC.Solid.Position, LoS) {
 		return false
 	}
@@ -905,8 +980,8 @@ func (s *Solid) chase() {
 	s.Velocity.X = 0
 	s.Velocity.Y = 0
 
-	diffX := 13 //math.Abs(float64(s.Position.X - s.Chase.Position.X))
-	diffY := 13 //math.Abs(float64(s.Position.Y - s.Chase.Position.Y))
+	diffX := math.Abs(float64(s.Position.X - s.Chase.Position.X))
+	diffY := math.Abs(float64(s.Position.Y - s.Chase.Position.Y))
 
 	if diffX > 12 && s.Position.X > s.Chase.Position.X {
 		s.Velocity.X = -1
@@ -1091,7 +1166,7 @@ func (s *Scene) _monstersRender(renderer *sdl.Renderer) {
 
 		if inScreen(scrPos) {
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
-			renderer.Copy(mon.Solid.Txt, src, scrPos)
+			renderer.Copy(slimeTxt, src, scrPos)
 			renderer.DrawRect(scrPos)
 			CullMap = append(CullMap, mon.Solid)
 		}
@@ -1159,9 +1234,6 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 		EventTick,
 		AiTick,
 	)
-
-	dbox.Present(renderer)
-
 	dbg_TextEl := TextEl{
 		Font:    font,
 		Content: dbg_content,
@@ -1169,6 +1241,8 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	}
 	dbg_txtr, W, H := dbg_TextEl.Bake(renderer)
 	renderer.Copy(dbg_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{0, winHeight - H, W, H})
+
+	dbox.Present(renderer)
 
 	for _, spw := range Spawners {
 		renderer.DrawRect(worldToScreen(spw.Position, Cam))
@@ -1307,28 +1381,52 @@ func feetRect(pos *sdl.Rect) *sdl.Rect {
 type SpawnPoint struct {
 	Position  *sdl.Rect
 	Frequency uint16
+	LvlMod    uint8
 	//SpawnList []*SpawnCfg
 }
 
-func MonsterFactory(sp *SpawnPoint) *Char {
-
-	rand.Seed(int64(time.Now().Nanosecond()))
-
+func (sp *SpawnPoint) Produce() {
 	px := rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X
 	py := rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y
 
-	mon := Char{
-		Lvl: 10,
+	mon := MonsterFactory(&SlimeTPL, sp.LvlMod, Vector2d{px, py})
+
+	Monsters = append(Monsters, mon)
+}
+
+func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Char {
+
+	variance := uint8(math.Floor(float64(rand.Float32() * monsterTpl.LvlVariance * 100)))
+	lvl := uint8((monsterTpl.Lvl + lvlMod) + variance)
+	hp := monsterTpl.HP + uint16(lvl*2)
+	sizeMod := int32(float32(lvl-monsterTpl.Lvl) * monsterTpl.ScalingFactor)
+	W := (monsterTpl.Size + sizeMod)
+	H := (monsterTpl.Size + sizeMod)
+
+	var drop = &Item{
+		Name:        "Specialized Green Blob",
+		Description: "A customized chunck of slime.",
 		Solid: &Solid{
-			Position:  &sdl.Rect{px, py, tSz, tSz},
+			Source: &sdl.Rect{24, 0, 24, 24},
+			Txt:    powerupsTxt,
+		},
+		Weight:    1,
+		BaseValue: 1,
+	}
+
+	mon := Char{
+		Lvl: lvl,
+		Solid: &Solid{
+			Position:  &sdl.Rect{pos.X, pos.Y, W, H},
 			Velocity:  &Vector2d{0, 0},
-			Txt:       slimeTxt,
+			Txt:       monsterTpl.Txtr,
 			Collision: 2,
 			Facing:    DEFAULT_FACING,
 			Handlers: &InteractionHandlers{
 				OnCollDmg: 12,
 			},
 			CPattern: 0,
+			LoS:      monsterTpl.LoS,
 			MPattern: []Movement{
 				Movement{F_DOWN, 50},
 				Movement{F_UP, 90},
@@ -1338,10 +1436,9 @@ func MonsterFactory(sp *SpawnPoint) *Char {
 			Chase: PC.Solid,
 		},
 		Speed:     1,
-		CurrentHP: 50,
-		MaxHP:     50,
-		CurrentST: 50,
-		MaxST:     50,
+		CurrentHP: hp,
+		MaxHP:     hp,
+		Drop:      drop,
 	}
 	mon.Solid.SetAnimation(WALK_FRONT_ANIM)
 	mon.Solid.CharPtr = &mon
