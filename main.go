@@ -125,43 +125,31 @@ var (
 
 	BGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{BGLOW_S1, BGLOW_S2, BGLOW_S3, BGLOW_S4, BGLOW_S3, BGLOW_S2}
 
-	LAVA_ANIM = &Animation{
-		Action:   LAVA_A,
-		PoseTick: 8,
-	}
+	LAVA_ANIM     = &Animation{Action: LAVA_A, PoseTick: 8}
+	LIFE_ORB_ANIM = &Animation{Action: YGLOW_A, PoseTick: 8}
 
-	LIFE_ORB_ANIM = &Animation{
-		Action:   YGLOW_A,
-		PoseTick: 8,
-	}
+	WALK_FRONT_ANIM = &Animation{Action: MAN_WALK_FRONT, PoseTick: 8}
+	WALK_BACK_ANIM  = &Animation{Action: MAN_WALK_BACK, PoseTick: 8}
+	WALK_LEFT_ANIM  = &Animation{Action: MAN_WALK_LEFT, PoseTick: 8}
+	WALK_RIGHT_ANIM = &Animation{Action: MAN_WALK_RIGHT, PoseTick: 8}
+	WALK_DL_ANIM    = &Animation{Action: MAN_WALK_DL, PoseTick: 8}
+	WALK_DR_ANIM    = &Animation{Action: MAN_WALK_DR, PoseTick: 8}
+	WALK_UL_ANIM    = &Animation{Action: MAN_WALK_UL, PoseTick: 8}
+	WALK_UR_ANIM    = &Animation{Action: MAN_WALK_UR, PoseTick: 8}
 
-	WALK_FRONT_ANIM = &Animation{
-		Action:   MAN_WALK_FRONT,
-		PoseTick: 8,
-	}
-
-	MAN_PB_ANIM = &Animation{
-		Action:   MAN_PUSH_BACK,
-		PoseTick: 18,
-		PlayMode: 1,
-	}
-
-	MAN_CS_ANIM = &Animation{
-		Action:   MAN_CAST,
-		PoseTick: 18,
-		PlayMode: 1,
-	}
+	MAN_PB_ANIM = &Animation{Action: MAN_PUSH_BACK, PoseTick: 18, PlayMode: 1}
+	MAN_CS_ANIM = &Animation{Action: MAN_CAST, PoseTick: 18, PlayMode: 1}
 
 	DEFAULT_FACING = Facing{
-		Up:        MAN_WALK_BACK,
-		Down:      MAN_WALK_FRONT,
-		Left:      MAN_WALK_LEFT,
-		Right:     MAN_WALK_RIGHT,
-		DownLeft:  MAN_WALK_DL,
-		DownRight: MAN_WALK_DR,
-		UpLeft:    MAN_WALK_UL,
-		UpRight:   MAN_WALK_UR,
-		PushBack:  MAN_PUSH_BACK,
+		Up:        WALK_BACK_ANIM,
+		Down:      WALK_FRONT_ANIM,
+		Left:      WALK_LEFT_ANIM,
+		Right:     WALK_RIGHT_ANIM,
+		DownLeft:  WALK_DL_ANIM,
+		DownRight: WALK_DR_ANIM,
+		UpLeft:    WALK_UL_ANIM,
+		UpRight:   WALK_UR_ANIM,
+		PushBack:  MAN_PB_ANIM,
 	}
 
 	LAVA_HANDLERS = &InteractionHandlers{
@@ -404,15 +392,15 @@ type Char struct {
 type Facing struct {
 	Orientation Vector2d
 
-	Up        [8]*sdl.Rect
-	Down      [8]*sdl.Rect
-	Left      [8]*sdl.Rect
-	Right     [8]*sdl.Rect
-	DownLeft  [8]*sdl.Rect
-	DownRight [8]*sdl.Rect
-	UpLeft    [8]*sdl.Rect
-	UpRight   [8]*sdl.Rect
-	PushBack  [8]*sdl.Rect
+	Up        *Animation
+	Down      *Animation
+	Left      *Animation
+	Right     *Animation
+	DownLeft  *Animation
+	DownRight *Animation
+	UpLeft    *Animation
+	UpRight   *Animation
+	PushBack  *Animation
 }
 
 type TextEl struct {
@@ -458,10 +446,10 @@ func (db *DBox) Present(renderer *sdl.Renderer) {
 	renderer.Copy(txtr, tr, bt)
 }
 
-func ActHitBox(source *sdl.Rect, facing Vector2d) *sdl.Rect {
+func ActHitBox(source *sdl.Rect, orientation Vector2d) *sdl.Rect {
 	return &sdl.Rect{
-		source.X + int32(facing.X*TSz),
-		source.Y + int32(facing.Y*TSz),
+		source.X + int32(orientation.X*TSz),
+		source.Y + int32(orientation.Y*TSz),
 		source.W,
 		source.H,
 	}
@@ -618,14 +606,14 @@ func (s *Solid) SetAnimation(an *Animation) {
 
 func (s *Solid) PlayAnimation() {
 	s.Anim.PoseTick -= 1
-	if s.Anim.PoseTick == 0 {
-		s.Anim.PoseTick = 16
 
+	if s.Anim.PoseTick == 0 {
+		s.Anim.PoseTick = 5
 		pvrPose := PC.Solid.Anim.Pose
 		s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
 		if s.Anim.Pose < pvrPose && s.Anim.PlayMode == 1 {
-			// TODO BACK TO ORIGINAL PREVIOUS ACTION
-			s.SetAnimation(WALK_FRONT_ANIM)
+			anim := s.CurrentFacing()
+			s.SetAnimation(anim)
 		}
 	}
 }
@@ -651,7 +639,6 @@ func (s *Solid) procMovement(speed float32) {
 	if (np.X == s.Position.X && np.Y == s.Position.Y) || outbound {
 		return
 	}
-
 	for _, obj := range CullMap {
 		if obj == s || obj.Position == nil {
 			continue
@@ -667,12 +654,12 @@ func (s *Solid) procMovement(speed float32) {
 		}
 	}
 
-	_, act := GetFacing(&s.Facing, *s.Velocity)
-	if s.Anim != nil && s.Anim.Action != act {
-		s.Anim.Action = act
-		s.Anim.Pose = 0
-		s.Anim.PoseTick = 8
+	anim := s.CurrentFacing()
+	if anim != nil && s.Anim != nil && s.Anim.PlayMode != 1 {
+		s.Anim.PlayMode = anim.PlayMode
+		s.Anim.Action = anim.Action
 	}
+
 	s.Facing.Orientation = *s.Velocity
 	s.Position = np
 }
@@ -1076,16 +1063,10 @@ func (s *Solid) peformPattern(sp float32) {
 
 	mov := anon(s.CPattern, s.MPattern)
 	if mov != nil && s.Position != nil {
-		applyMov(s.Position, mov.Orientation, sp)
+		s.Facing.Orientation = mov.Orientation
+		s.Velocity = &mov.Orientation
+		s.procMovement(sp)
 		s.CPattern += uint32(sp)
-
-		if s.Facing.Up[0] != nil {
-			_, na := GetFacing(&s.Facing, mov.Orientation)
-			if na != s.Anim.Action {
-				s.Anim.Action = na
-				s.Anim.PoseTick = 0
-			}
-		}
 	}
 }
 
@@ -1114,36 +1095,37 @@ func PlayDialog(listener *Solid, speaker *Solid) {
 	}
 }
 
-func GetFacing(f *Facing, o Vector2d) (Vector2d, [8]*sdl.Rect) {
-	if o.X == 0 && o.Y == -1 {
-		return F_UP, f.Up
+func (s *Solid) CurrentFacing() *Animation {
+
+	if s.Facing.Orientation.X == 0 && s.Facing.Orientation.Y == -1 {
+		return s.Facing.Up
 	}
 
-	if o.X == -1 && o.Y == 0 {
-		return F_LEFT, f.Left
+	if s.Facing.Orientation.X == -1 && s.Facing.Orientation.Y == 0 {
+		return s.Facing.Left
 	}
 
-	if o.X == 1 && o.Y == 0 {
-		return F_RIGHT, f.Right
+	if s.Facing.Orientation.X == 1 && s.Facing.Orientation.Y == 0 {
+		return s.Facing.Right
 	}
 
-	if o.X == 1 && o.Y == 1 {
-		return F_DR, f.DownRight
+	if s.Facing.Orientation.X == 1 && s.Facing.Orientation.Y == 1 {
+		return s.Facing.DownRight
 	}
 
-	if o.X == 1 && o.Y == -1 {
-		return F_UR, f.UpRight
+	if s.Facing.Orientation.X == 1 && s.Facing.Orientation.Y == -1 {
+		return s.Facing.UpRight
 	}
 
-	if o.X == -1 && o.Y == 1 {
-		return F_DL, f.DownLeft
+	if s.Facing.Orientation.X == -1 && s.Facing.Orientation.Y == 1 {
+		return s.Facing.DownLeft
 	}
 
-	if o.X == -1 && o.Y == -1 {
-		return F_UL, f.UpLeft
+	if s.Facing.Orientation.X == -1 && s.Facing.Orientation.Y == -1 {
+		return s.Facing.UpLeft
 	}
 
-	return F_DOWN, f.Down
+	return s.Facing.Down
 }
 
 func applyMov(p *sdl.Rect, o Vector2d, s float32) {
@@ -1383,7 +1365,7 @@ func (c *Char) PushBack(d float32) {
 	f := c.Solid.Facing.Orientation
 	c.Solid.Position.X -= int32(f.X * d * 4)
 	c.Solid.Position.Y -= int32(f.Y * d * 4)
-	if c.Solid.Facing.PushBack[0] != nil {
+	if c.Solid.Facing.PushBack != nil {
 		c.Solid.SetAnimation(MAN_PB_ANIM)
 	}
 }
