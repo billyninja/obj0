@@ -24,10 +24,10 @@ const (
 	KEY_ARROW_LEFT              = 1073741904
 	KEY_ARROW_RIGHT             = 1073741903
 	KEY_LEFT_SHIT               = 1073742049
-	KEY_SPACE_BAR               = 32 //1073741824 //
+	KEY_SPACE_BAR               = 1073741824 // 32
 	KEY_C                       = 99
-	AI_TICK_LENGTH              = 4
-	EVENT_TICK_LENGTH           = 6
+	AI_TICK_LENGTH              = 2
+	EVENT_TICK_LENGTH           = 2
 )
 
 var (
@@ -103,7 +103,7 @@ var (
 	MAN_WALK_LEFT  [8]*sdl.Rect = [8]*sdl.Rect{MAN_LEFT_N, MAN_LEFT_R, MAN_LEFT_N, MAN_LEFT_L}
 	MAN_WALK_RIGHT [8]*sdl.Rect = [8]*sdl.Rect{MAN_RIGHT_N, MAN_RIGHT_R, MAN_RIGHT_N, MAN_RIGHT_L}
 	MAN_WALK_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_BACK_N, MAN_BACK_R, MAN_BACK_N, MAN_BACK_L}
-	MAN_PUSH_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_PB_S1, MAN_PB_S2, MAN_PB_S3}
+	MAN_PUSH_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_PB_S1, MAN_PB_S2}
 	MAN_CAST       [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S1, MAN_CS_S2, MAN_CS_S3, MAN_CS_S4}
 
 	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, TSzi, TSzi}
@@ -589,7 +589,9 @@ func handleKeyEvent(key sdl.Keycode) Vector2d {
 func handleKeyUpEvent(key sdl.Keycode) {
 	switch key {
 	case KEY_C:
-		PC.peformHaduken()
+		if PC.Solid.Anim.PlayMode != 1 {
+			PC.peformHaduken()
+		}
 	case KEY_LEFT_SHIT:
 		PC.Speed = PC.BaseSpeed
 	case KEY_ARROW_UP:
@@ -627,6 +629,9 @@ func (s *Solid) PlayAnimation() {
 }
 
 func (s *Solid) procMovement(speed float32) {
+	if s.Velocity.X != 0 && s.Velocity.Y != 0 {
+		speed -= 0.5
+	}
 	np := &sdl.Rect{
 		(s.Position.X + int32(s.Velocity.X*speed)),
 		(s.Position.Y + int32(s.Velocity.Y*speed)),
@@ -667,9 +672,9 @@ func (s *Solid) procMovement(speed float32) {
 
 func catchEvents() bool {
 	var c bool
+
 	if PC.Solid.Anim.PlayMode == 1 {
 		PC.Solid.PlayAnimation()
-		return true
 	}
 
 	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -680,10 +685,12 @@ func catchEvents() bool {
 			v := handleKeyEvent(t.Keysym.Sym)
 			if v.X != 0 {
 				PC.Solid.Velocity.X = v.X
+				PC.Solid.Facing.Orientation.X = v.X
 				c = true
 			}
 			if v.Y != 0 {
 				PC.Solid.Velocity.Y = v.Y
+				PC.Solid.Facing.Orientation.Y = v.Y
 				c = true
 			}
 		case *sdl.KeyUpEvent:
@@ -691,7 +698,7 @@ func catchEvents() bool {
 		}
 	}
 
-	if c {
+	if c && PC.Solid.Anim.PlayMode == 0 {
 		PC.Solid.PlayAnimation()
 		PC.Solid.procMovement(PC.Speed)
 
@@ -984,7 +991,7 @@ func (s *Scene) update() {
 			}
 
 			rand.Seed(int64(time.Now().Nanosecond()))
-			if uint16(rand.Int31n(255)) < spw.Frequency {
+			if uint16(rand.Int31n(1000)) < spw.Frequency {
 				spw.Produce()
 				spw.Frequency -= 1
 			}
@@ -1253,9 +1260,11 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 
 	// XP BAR
 	renderer.SetDrawColor(90, 90, 0, 255)
-	renderer.FillRect(&sdl.Rect{10, 38, 100, 4})
 	renderer.SetDrawColor(190, 190, 0, 255)
 	renderer.FillRect(&sdl.Rect{10, 38, int32(calcPerc(float32(PC.CurrentXP), float32(PC.NextLvlXP))), 4})
+
+	renderer.SetDrawColor(90, 90, 90, 255)
+	renderer.FillRect(&sdl.Rect{0, 60, 240, 30})
 
 	for i, stack := range PC.Inventory {
 		counter := TextEl{
@@ -1267,8 +1276,8 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 		counterTxtr, cW, cH := counter.Bake(renderer)
 		pos := sdl.Rect{8 + (int32(i) * 32), 60, 24, 24}
 		renderer.Copy(stack.ItemTpl.Txtr, stack.ItemTpl.Source, &pos)
-		pos.Y += (stack.ItemTpl.Source.H + 4)
-		pos.X += 8
+		pos.Y += 16
+		pos.X += 16
 		pos.W = cW
 		pos.H = cH
 		renderer.Copy(counterTxtr, &sdl.Rect{0, 0, cW, cH}, &pos)
