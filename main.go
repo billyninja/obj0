@@ -27,7 +27,7 @@ const (
 	KEY_SPACE_BAR               = 1073741824 // 32
 	KEY_C                       = 99
 	AI_TICK_LENGTH              = 2
-	EVENT_TICK_LENGTH           = 2
+	EVENT_TICK_LENGTH           = 3
 )
 
 var (
@@ -165,7 +165,7 @@ var (
 	}
 
 	LAVA_HANDLERS = &InteractionHandlers{
-		OnCollDmg: 3,
+		OnCollDmg: 12,
 	}
 
 	ATK_UP *PowerUp = &PowerUp{
@@ -381,6 +381,7 @@ type PowerUp struct {
 	Description string
 	Ico         *sdl.Rect
 	IcoTxt      *sdl.Texture
+	Ttl         int64
 }
 
 type Char struct {
@@ -397,6 +398,7 @@ type Char struct {
 	MaxST     float32
 	Drop      *Item
 	Inventory []*ItemStack
+	Invinc    int64
 }
 
 type Facing struct {
@@ -496,7 +498,7 @@ func actProc() {
 	}
 }
 
-func onColHdk(hdk *Solid, tgt *Solid) {
+func onColHdk(tgt *Solid, hdk *Solid) {
 	if tgt.CharPtr != nil {
 		tgt.CharPtr.depletHP(hdk.Handlers.OnCollDmg)
 	}
@@ -631,6 +633,9 @@ func (s *Solid) PlayAnimation() {
 func (s *Solid) procMovement(speed float32) {
 	if s.Velocity.X != 0 && s.Velocity.Y != 0 {
 		speed -= 0.5
+		if speed < 1 {
+			speed = 1
+		}
 	}
 	np := &sdl.Rect{
 		(s.Position.X + int32(s.Velocity.X*speed)),
@@ -652,16 +657,18 @@ func (s *Solid) procMovement(speed float32) {
 			continue
 		}
 		fr := feetRect(np)
-		if checkCol(fr, obj.Position) && obj.Collision == 1 {
+		if checkCol(fr, obj.Position) {
 			if obj.Handlers != nil && obj.Handlers.OnCollEvent != nil {
-				obj.Handlers.OnCollEvent(obj, s)
+				obj.Handlers.OnCollEvent(s, obj)
 			}
-			return
+			if obj.Collision == 1 {
+				return
+			}
 		}
 	}
 
 	_, act := GetFacing(&s.Facing, *s.Velocity)
-	if s.Anim.Action != act {
+	if s.Anim != nil && s.Anim.Action != act {
 		s.Anim.Action = act
 		s.Anim.Pose = 0
 		s.Anim.PoseTick = 8
@@ -832,7 +839,7 @@ func (s *Scene) populate(population int) {
 				Collision: 0,
 				Handlers: &InteractionHandlers{
 					OnCollEvent: pickUp,
-					OnPickUp: func(healed *Solid, healer *Solid) {
+					OnPickUp: func(healed *Solid, orb *Solid) {
 						if healed.CharPtr != nil {
 							healed.CharPtr.CurrentHP += 10
 						}
@@ -930,6 +937,16 @@ func (s *Scene) update() {
 	AiTick -= 1
 
 	now := time.Now().Unix()
+
+	if PC.Invinc > 0 && now > PC.Invinc {
+		println("pc invincibility ended!")
+		PC.Invinc = 0
+	}
+
+	if len(dbox.Text) > 0 {
+		AiTick = AI_TICK_LENGTH
+	}
+
 	for _, cObj := range CullMap {
 		// Ttl kill
 		if cObj.Ttl > 0 && cObj.Ttl < now {
@@ -958,16 +975,14 @@ func (s *Scene) update() {
 			cObj.PlayAnimation()
 		}
 
-		if len(dbox.Text) > 0 {
-			AiTick = AI_TICK_LENGTH
-			return
-		}
-
 		if cObj.Handlers != nil && EventTick == 0 {
 			fr := feetRect(PC.Solid.Position)
 			if checkCol(fr, cObj.Position) {
 				if cObj.Handlers.OnCollDmg != 0 {
 					PC.depletHP(cObj.Handlers.OnCollDmg)
+					if PC.Invinc == 0 {
+						PC.Invinc = time.Now().Add(2 * time.Second).Unix()
+					}
 				}
 				if cObj.Handlers.OnCollEvent != nil {
 					cObj.Handlers.OnCollEvent(PC.Solid, cObj)
@@ -990,7 +1005,6 @@ func (s *Scene) update() {
 				spw.Frequency += 1
 			}
 
-			rand.Seed(int64(time.Now().Nanosecond()))
 			if uint16(rand.Int31n(1000)) < spw.Frequency {
 				spw.Produce()
 				spw.Frequency -= 1
@@ -999,10 +1013,12 @@ func (s *Scene) update() {
 
 		EventTick = EVENT_TICK_LENGTH
 	}
+
 	if AiTick == 0 {
 		AiTick = AI_TICK_LENGTH
 	}
-}
+
+} // end update()
 
 func (s *Solid) LoSCheck() bool {
 	LoS := &sdl.Rect{
@@ -1032,11 +1048,11 @@ func (s *Solid) chase() {
 	if diffX > 24 && s.Position.X < s.Chase.Position.X {
 		s.Velocity.X = 1
 	}
-	if diffY > 24 && s.Position.Y > s.Chase.Position.Y {
+	if diffY > 18 && s.Position.Y > s.Chase.Position.Y {
 		s.Velocity.Y = -1
 	}
 
-	if diffY > 24 && s.Position.Y < s.Chase.Position.Y {
+	if diffY > 18 && s.Position.Y < s.Chase.Position.Y {
 		s.Velocity.Y = 1
 	}
 
@@ -1325,8 +1341,10 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 	s._solidsRender(renderer)
 	s._monstersRender(renderer)
 	// Rendering the PC
-	scrPos := worldToScreen(PC.Solid.Position, Cam)
-	renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], scrPos)
+	if !(PC.Invinc > 0 && EventTick == 2) {
+		scrPos := worldToScreen(PC.Solid.Position, Cam)
+		renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], scrPos)
+	}
 	s._GUIRender(renderer)
 
 	// FLUSH FRAME
@@ -1350,12 +1368,15 @@ func inScreen(r *sdl.Rect) bool {
 }
 
 func (ch *Char) depletHP(dmg float32) {
+	if ch.Invinc > 0 {
+		return
+	}
 	if dmg > ch.CurrentHP {
 		ch.CurrentHP = 0
 	} else {
 		ch.CurrentHP -= dmg
 	}
-	ch.PushBack(8)
+	ch.PushBack(12)
 }
 
 func (c *Char) PushBack(d float32) {
