@@ -41,7 +41,7 @@ var (
 	particlesTxt   *sdl.Texture = nil
 	powerupsTxt    *sdl.Texture = nil
 	glowTxt        *sdl.Texture = nil
-	slimeTxt       *sdl.Texture = nil
+	monstersTxt    *sdl.Texture = nil
 
 	GRASS     *sdl.Rect = &sdl.Rect{0, 0, TSzi, TSzi}
 	DIRT                = &sdl.Rect{703, 0, TSzi, TSzi}
@@ -61,50 +61,16 @@ var (
 	F_UR             = Vector2d{1, -1}
 
 	// MAIN CHAR POSES AND ANIMATIONS
-	MAN_FRONT_R *sdl.Rect = &sdl.Rect{0, 0, TSzi, TSzi}
-	MAN_FRONT_N *sdl.Rect = &sdl.Rect{32, 0, TSzi, TSzi}
-	MAN_FRONT_L *sdl.Rect = &sdl.Rect{64, 0, TSzi, TSzi}
-	MAN_LEFT_R  *sdl.Rect = &sdl.Rect{0, 32, TSzi, TSzi}
-	MAN_LEFT_N  *sdl.Rect = &sdl.Rect{32, 32, TSzi, TSzi}
-	MAN_LEFT_L  *sdl.Rect = &sdl.Rect{64, 32, TSzi, TSzi}
-	MAN_RIGHT_R *sdl.Rect = &sdl.Rect{0, 64, TSzi, TSzi}
-	MAN_RIGHT_N *sdl.Rect = &sdl.Rect{32, 64, TSzi, TSzi}
-	MAN_RIGHT_L *sdl.Rect = &sdl.Rect{64, 64, TSzi, TSzi}
-	MAN_BACK_R  *sdl.Rect = &sdl.Rect{0, 96, TSzi, TSzi}
-	MAN_BACK_N  *sdl.Rect = &sdl.Rect{32, 96, TSzi, TSzi}
-	MAN_BACK_L  *sdl.Rect = &sdl.Rect{64, 96, TSzi, TSzi}
-	MAN_UL_R    *sdl.Rect = &sdl.Rect{96, 32, TSzi, TSzi}
-	MAN_UL_N    *sdl.Rect = &sdl.Rect{128, 32, TSzi, TSzi}
-	MAN_UL_L    *sdl.Rect = &sdl.Rect{160, 32, TSzi, TSzi}
-	MAN_UR_R    *sdl.Rect = &sdl.Rect{96, 96, TSzi, TSzi}
-	MAN_UR_N    *sdl.Rect = &sdl.Rect{128, 96, TSzi, TSzi}
-	MAN_UR_L    *sdl.Rect = &sdl.Rect{160, 96, TSzi, TSzi}
-	MAN_DL_R    *sdl.Rect = &sdl.Rect{96, 0, TSzi, TSzi}
-	MAN_DL_N    *sdl.Rect = &sdl.Rect{128, 0, TSzi, TSzi}
-	MAN_DL_L    *sdl.Rect = &sdl.Rect{160, 0, TSzi, TSzi}
-	MAN_DR_R    *sdl.Rect = &sdl.Rect{96, 64, TSzi, TSzi}
-	MAN_DR_N    *sdl.Rect = &sdl.Rect{128, 64, TSzi, TSzi}
-	MAN_DR_L    *sdl.Rect = &sdl.Rect{160, 64, TSzi, TSzi}
-
 	MAN_PB_S1 *sdl.Rect = &sdl.Rect{96, 160, TSzi, TSzi}
 	MAN_PB_S2 *sdl.Rect = &sdl.Rect{128, 160, TSzi, TSzi}
 	MAN_PB_S3 *sdl.Rect = &sdl.Rect{160, 160, TSzi, TSzi}
 
-	MAN_CS_S1 *sdl.Rect = &sdl.Rect{192, 224, TSzi, TSzi}
-	MAN_CS_S2 *sdl.Rect = &sdl.Rect{224, 224, TSzi, TSzi}
-	MAN_CS_S3 *sdl.Rect = &sdl.Rect{256, 224, TSzi, TSzi}
-	MAN_CS_S4 *sdl.Rect = &sdl.Rect{224, 192, TSzi, TSzi}
-
-	MAN_WALK_DL    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DL_N, MAN_DL_L, MAN_DL_N, MAN_DL_R}
-	MAN_WALK_DR    [8]*sdl.Rect = [8]*sdl.Rect{MAN_DR_N, MAN_DR_L, MAN_DR_N, MAN_DR_R}
-	MAN_WALK_UL    [8]*sdl.Rect = [8]*sdl.Rect{MAN_UL_N, MAN_UL_L, MAN_UL_N, MAN_UL_R}
-	MAN_WALK_UR    [8]*sdl.Rect = [8]*sdl.Rect{MAN_UR_N, MAN_UR_L, MAN_UR_N, MAN_UR_R}
-	MAN_WALK_FRONT [8]*sdl.Rect = [8]*sdl.Rect{MAN_FRONT_N, MAN_FRONT_R, MAN_FRONT_N, MAN_FRONT_L}
-	MAN_WALK_LEFT  [8]*sdl.Rect = [8]*sdl.Rect{MAN_LEFT_N, MAN_LEFT_R, MAN_LEFT_N, MAN_LEFT_L}
-	MAN_WALK_RIGHT [8]*sdl.Rect = [8]*sdl.Rect{MAN_RIGHT_N, MAN_RIGHT_R, MAN_RIGHT_N, MAN_RIGHT_L}
-	MAN_WALK_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_BACK_N, MAN_BACK_R, MAN_BACK_N, MAN_BACK_L}
-	MAN_PUSH_BACK  [8]*sdl.Rect = [8]*sdl.Rect{MAN_PB_S1, MAN_PB_S2}
-	MAN_CAST       [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S1, MAN_CS_S2, MAN_CS_S3, MAN_CS_S4}
+	MAN_CS_S1     *sdl.Rect    = &sdl.Rect{192, 224, TSzi, TSzi}
+	MAN_CS_S2     *sdl.Rect    = &sdl.Rect{224, 224, TSzi, TSzi}
+	MAN_CS_S3     *sdl.Rect    = &sdl.Rect{256, 224, TSzi, TSzi}
+	MAN_CS_S4     *sdl.Rect    = &sdl.Rect{224, 192, TSzi, TSzi}
+	MAN_PUSH_BACK [8]*sdl.Rect = [8]*sdl.Rect{MAN_PB_S1, MAN_PB_S2}
+	MAN_CAST      [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S1, MAN_CS_S2, MAN_CS_S3, MAN_CS_S4}
 
 	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, TSzi, TSzi}
 	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, TSzi, TSzi}
@@ -127,30 +93,11 @@ var (
 
 	LAVA_ANIM     = &Animation{Action: LAVA_A, PoseTick: 8}
 	LIFE_ORB_ANIM = &Animation{Action: YGLOW_A, PoseTick: 8}
+	MAN_PB_ANIM   = &Animation{Action: MAN_PUSH_BACK, PoseTick: 18, PlayMode: 1}
+	MAN_CS_ANIM   = &Animation{Action: MAN_CAST, PoseTick: 18, PlayMode: 1}
 
-	WALK_FRONT_ANIM = &Animation{Action: MAN_WALK_FRONT, PoseTick: 8}
-	WALK_BACK_ANIM  = &Animation{Action: MAN_WALK_BACK, PoseTick: 8}
-	WALK_LEFT_ANIM  = &Animation{Action: MAN_WALK_LEFT, PoseTick: 8}
-	WALK_RIGHT_ANIM = &Animation{Action: MAN_WALK_RIGHT, PoseTick: 8}
-	WALK_DL_ANIM    = &Animation{Action: MAN_WALK_DL, PoseTick: 8}
-	WALK_DR_ANIM    = &Animation{Action: MAN_WALK_DR, PoseTick: 8}
-	WALK_UL_ANIM    = &Animation{Action: MAN_WALK_UL, PoseTick: 8}
-	WALK_UR_ANIM    = &Animation{Action: MAN_WALK_UR, PoseTick: 8}
-
-	MAN_PB_ANIM = &Animation{Action: MAN_PUSH_BACK, PoseTick: 18, PlayMode: 1}
-	MAN_CS_ANIM = &Animation{Action: MAN_CAST, PoseTick: 18, PlayMode: 1}
-
-	DEFAULT_FACING = Facing{
-		Up:        WALK_BACK_ANIM,
-		Down:      WALK_FRONT_ANIM,
-		Left:      WALK_LEFT_ANIM,
-		Right:     WALK_RIGHT_ANIM,
-		DownLeft:  WALK_DL_ANIM,
-		DownRight: WALK_DR_ANIM,
-		UpLeft:    WALK_UL_ANIM,
-		UpRight:   WALK_UR_ANIM,
-		PushBack:  MAN_PB_ANIM,
-	}
+	BatTPL MonsterTemplate = MonsterTemplate{}
+	OrcTPL MonsterTemplate = MonsterTemplate{}
 
 	LAVA_HANDLERS = &InteractionHandlers{
 		OnCollDmg: 12,
@@ -198,13 +145,9 @@ var (
 
 	PC = Char{
 		Solid: &Solid{
-			Velocity: &Vector2d{0, 0},
-			Facing:   DEFAULT_FACING,
-			Anim: &Animation{
-				Action:   MAN_WALK_FRONT,
-				Pose:     0,
-				PoseTick: 24,
-			},
+			Velocity:    &Vector2d{0, 0},
+			Orientation: &Vector2d{0, -1},
+			Anim:        MAN_CS_ANIM,
 		},
 		Lvl:       1,
 		CurrentXP: 0,
@@ -277,7 +220,10 @@ type Loot struct {
 }
 
 type MonsterTemplate struct {
-	Txtr          *sdl.Texture
+	Txtr        *sdl.Texture
+	ActionMap   *ActionMap
+	SpriteSheet *SpriteSheet
+
 	Lvl           uint8
 	HP            float32
 	Size          int32
@@ -285,6 +231,138 @@ type MonsterTemplate struct {
 	ScalingFactor float32
 	LoS           int32
 	Loot          [8]Loot
+}
+
+type ActionMap struct {
+	UP    *Animation
+	DOWN  *Animation
+	LEFT  *Animation
+	RIGHT *Animation
+	UL    *Animation
+	UR    *Animation
+	DL    *Animation
+	DR    *Animation
+	//---
+	PB *Animation
+	//---
+	SA_1 *Animation
+	SA_2 *Animation
+	SA_3 *Animation
+	SA_4 *Animation
+	SA_5 *Animation
+	SA_6 *Animation
+	//---
+}
+
+type SpriteSheet struct {
+	Txtr  *sdl.Texture
+	StX   int32
+	StY   int32
+	StepW int32
+	StepH int32
+}
+
+func (ss *SpriteSheet) BuildBasicActions(actLength uint8, hasDiagonals bool) *ActionMap {
+	O := []Vector2d{F_UP, F_DOWN, F_LEFT, F_RIGHT}
+	if hasDiagonals {
+		O = append(O, []Vector2d{F_DL, F_DR, F_UL, F_UR}...)
+	}
+	var AM = &ActionMap{}
+	for _, o := range O {
+		anim := &Animation{}
+
+		for p := 0; p < int(actLength); p++ {
+			anim.Action[p] = ss.GetPose(o, uint8(p))
+			println(
+				o.X,
+				o.Y,
+				anim.Action[p].X,
+				anim.Action[p].Y,
+				anim.Action[p].W,
+				anim.Action[p].H)
+		}
+
+		switch o {
+		case F_UP:
+			AM.UP = anim
+			break
+		case F_DOWN:
+			AM.DOWN = anim
+			break
+		case F_LEFT:
+			AM.LEFT = anim
+			break
+		case F_RIGHT:
+			AM.RIGHT = anim
+			break
+		case F_DL:
+			AM.DL = anim
+			break
+		case F_DR:
+			AM.DR = anim
+			break
+		case F_UL:
+			AM.UL = anim
+			break
+		case F_UR:
+			AM.UR = anim
+			break
+		} // end switch
+	} // end for
+	return AM
+}
+
+func (ss *SpriteSheet) GetPose(o Vector2d, p uint8) *sdl.Rect {
+
+	var (
+		poseY int32 = 0
+		poseX int32 = 0
+	)
+
+	if o.X == -1 && o.Y == 0 {
+		poseY = ss.StepW
+	}
+	if o.X == 1 && o.Y == 0 {
+		poseY = ss.StepW * 2
+	}
+	if o.Y == -1 && o.X == 0 {
+		poseY = ss.StepW * 3
+	}
+	if o.Y == 1 && o.X == 0 {
+		poseY = 0
+	}
+	switch o {
+	case F_UP:
+		poseY = ss.StepH * 3
+		break
+	case F_DOWN:
+		break
+	case F_LEFT:
+		poseY = ss.StepH * 1
+		break
+	case F_RIGHT:
+		poseY = ss.StepH * 2
+		break
+	case F_DL:
+		poseX = ss.StepW * 3
+		break
+	case F_DR:
+		poseY = ss.StepH * 2
+		poseX = ss.StepW * 3
+		break
+	case F_UL:
+		poseY = ss.StepH * 1
+		poseX = ss.StepW * 3
+		break
+	case F_UR:
+		poseY = ss.StepH * 3
+		poseX = ss.StepW * 3
+		break
+	}
+
+	poseX += int32(p) * ss.StepW
+
+	return &sdl.Rect{ss.StX + poseX, ss.StY + poseY, ss.StepW, ss.StepH}
 }
 
 var (
@@ -304,7 +382,7 @@ var (
 	}
 
 	SlimeTPL MonsterTemplate = MonsterTemplate{
-		Txtr:          slimeTxt,
+		Txtr:          monstersTxt,
 		Lvl:           1,
 		HP:            25,
 		LoS:           90,
@@ -332,15 +410,15 @@ type InteractionHandlers struct {
 }
 
 type Solid struct {
-	Velocity  *Vector2d
-	Position  *sdl.Rect
-	Source    *sdl.Rect
-	Facing    Facing
-	Anim      *Animation
-	Handlers  *InteractionHandlers
-	Txt       *sdl.Texture
-	Ttl       int64
-	Collision uint8
+	Velocity    *Vector2d
+	Orientation *Vector2d
+	Position    *sdl.Rect
+	Source      *sdl.Rect
+	Anim        *Animation
+	Handlers    *InteractionHandlers
+	Txt         *sdl.Texture
+	Ttl         int64
+	Collision   uint8
 
 	// AI RELATED
 	CPattern uint32
@@ -375,6 +453,9 @@ type PowerUp struct {
 type Char struct {
 	Solid     *Solid
 	Buffs     []*PowerUp
+	ActionMap *ActionMap
+	Inventory []*ItemStack
+	//---
 	BaseSpeed float32
 	Speed     float32
 	Lvl       uint8
@@ -385,22 +466,7 @@ type Char struct {
 	CurrentST float32
 	MaxST     float32
 	Drop      *Item
-	Inventory []*ItemStack
 	Invinc    int64
-}
-
-type Facing struct {
-	Orientation Vector2d
-
-	Up        *Animation
-	Down      *Animation
-	Left      *Animation
-	Right     *Animation
-	DownLeft  *Animation
-	DownRight *Animation
-	UpLeft    *Animation
-	UpRight   *Animation
-	PushBack  *Animation
 }
 
 type TextEl struct {
@@ -446,7 +512,7 @@ func (db *DBox) Present(renderer *sdl.Renderer) {
 	renderer.Copy(txtr, tr, bt)
 }
 
-func ActHitBox(source *sdl.Rect, orientation Vector2d) *sdl.Rect {
+func ActHitBox(source *sdl.Rect, orientation *Vector2d) *sdl.Rect {
 	return &sdl.Rect{
 		source.X + int32(orientation.X*TSz),
 		source.Y + int32(orientation.Y*TSz),
@@ -472,7 +538,7 @@ func (t *TextEl) Bake(renderer *sdl.Renderer) (*sdl.Texture, int32, int32) {
 }
 
 func actProc() {
-	action_hit_box := ActHitBox(PC.Solid.Position, PC.Solid.Facing.Orientation)
+	action_hit_box := ActHitBox(PC.Solid.Position, PC.Solid.Orientation)
 
 	// Debug hint
 	GUI = append(GUI, action_hit_box)
@@ -503,20 +569,19 @@ func onColHdk(tgt *Solid, hdk *Solid) {
 	}
 
 	Interactive = append(Interactive, sol)
-
 	hdk.Destroy()
 }
 
 func (c *Char) peformHaduken() {
 
-	var stCost float32 = 8
+	var stCost float32 = 15
 
 	if stCost > c.CurrentST {
 		return
 	}
 	c.CurrentST -= stCost
 
-	r := ActHitBox(c.Solid.Position, c.Solid.Facing.Orientation)
+	r := ActHitBox(c.Solid.Position, c.Solid.Orientation)
 	ttl := time.Now().Add(3 * time.Second)
 
 	h := &Solid{
@@ -534,7 +599,7 @@ func (c *Char) peformHaduken() {
 		},
 		CPattern: 0,
 		MPattern: []Movement{
-			Movement{c.Solid.Facing.Orientation, 255},
+			Movement{*c.Solid.Orientation, 255},
 		},
 		Collision: 1,
 	}
@@ -553,6 +618,7 @@ func (db *DBox) NextText() bool {
 	}
 	return true
 }
+
 func handleKeyEvent(key sdl.Keycode) Vector2d {
 	N := Vector2d{0, 0}
 	switch key {
@@ -609,11 +675,13 @@ func (s *Solid) PlayAnimation() {
 
 	if s.Anim.PoseTick == 0 {
 		s.Anim.PoseTick = 5
-		pvrPose := PC.Solid.Anim.Pose
-		s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
-		if s.Anim.Pose < pvrPose && s.Anim.PlayMode == 1 {
-			anim := s.CurrentFacing()
-			s.SetAnimation(anim)
+		if s.CharPtr != nil {
+			anim := s.CharPtr.CurrentFacing()
+			pvrPose := s.Anim.Pose
+			s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
+			if anim != nil && s.Anim.Pose < pvrPose && s.Anim.PlayMode == 1 {
+				s.SetAnimation(anim)
+			}
 		}
 	}
 }
@@ -654,13 +722,15 @@ func (s *Solid) procMovement(speed float32) {
 		}
 	}
 
-	anim := s.CurrentFacing()
-	if anim != nil && s.Anim != nil && s.Anim.PlayMode != 1 {
-		s.Anim.PlayMode = anim.PlayMode
-		s.Anim.Action = anim.Action
+	if s.CharPtr != nil {
+		anim := s.CharPtr.CurrentFacing()
+		if anim != nil && s.Anim != nil && s.Anim.PlayMode != 1 {
+			s.Anim.PlayMode = anim.PlayMode
+			s.Anim.Action = anim.Action
+		}
 	}
 
-	s.Facing.Orientation = *s.Velocity
+	*s.Orientation = *s.Velocity
 	s.Position = np
 }
 
@@ -679,12 +749,12 @@ func catchEvents() bool {
 			v := handleKeyEvent(t.Keysym.Sym)
 			if v.X != 0 {
 				PC.Solid.Velocity.X = v.X
-				PC.Solid.Facing.Orientation.X = v.X
+				PC.Solid.Orientation.X = v.X
 				c = true
 			}
 			if v.Y != 0 {
 				PC.Solid.Velocity.Y = v.Y
-				PC.Solid.Facing.Orientation.Y = v.Y
+				PC.Solid.Orientation.Y = v.Y
 				c = true
 			}
 		case *sdl.KeyUpEvent:
@@ -726,7 +796,7 @@ func catchEvents() bool {
 
 	} else {
 		if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
-			PC.CurrentST += (PC.MaxST * 0.0009)
+			PC.CurrentST += (PC.MaxST * 0.001)
 		}
 	}
 
@@ -773,21 +843,20 @@ func (s *Scene) build() {
 }
 
 func (s *Scene) populate(population int) {
-	dt := SCN_PLAINS
+	doorTo := SCN_PLAINS
 	if s.codename == "plains" {
-		dt = SCN_CAVE
+		doorTo = SCN_CAVE
 	}
-	//population = 0
+
 	for i := 0; i < population; i++ {
 
 		cX := rand.Int31n(s.CellsX)
 		cY := rand.Int31n(s.CellsY)
 
 		absolute_pos := &sdl.Rect{cX * TSzi, cY * TSzi, TSzi, TSzi}
-		obj_type := rand.Int31n(10)
 		sol := &Solid{}
 
-		switch obj_type {
+		switch rand.Int31n(9) {
 		case 1:
 			sol = &Solid{
 				Position: absolute_pos,
@@ -811,7 +880,7 @@ func (s *Scene) populate(population int) {
 				Collision: 1,
 				Handlers: &InteractionHandlers{
 					OnActEvent: BashDoor,
-					DoorTo:     dt,
+					DoorTo:     doorTo,
 				},
 			}
 			Interactive = append(Interactive, sol)
@@ -849,7 +918,7 @@ func (s *Scene) populate(population int) {
 			rand.Seed(int64(time.Now().Nanosecond()))
 			spw := &SpawnPoint{
 				Position:  absolute_pos,
-				Frequency: uint16((rand.Int31n(5) + 5)),
+				Frequency: uint16(rand.Int31n(5)),
 			}
 			Spawners = append(Spawners, spw)
 			break
@@ -860,12 +929,7 @@ func (s *Scene) populate(population int) {
 					Velocity:  &Vector2d{0, 0},
 					Txt:       spritesheetTxt,
 					Collision: 1,
-					Facing:    DEFAULT_FACING,
-					Anim: &Animation{
-						Action:   MAN_WALK_FRONT,
-						Pose:     0,
-						PoseTick: 16,
-					},
+					Anim:      PC.ActionMap.DOWN,
 					Handlers: &InteractionHandlers{
 						OnActEvent:   PlayDialog,
 						DialogScript: []string{"more", "npc", "chitchat"},
@@ -878,6 +942,7 @@ func (s *Scene) populate(population int) {
 						Movement{F_LEFT, 10},
 					},
 				},
+				ActionMap: PC.ActionMap,
 				Speed:     1,
 				CurrentHP: 9999,
 				MaxHP:     9999,
@@ -988,7 +1053,7 @@ func (s *Scene) update() {
 
 	if EventTick == 0 {
 		for _, spw := range Spawners {
-			if spw.Frequency == 0 {
+			if spw.Frequency <= 0 {
 				spw.Frequency += 1
 			}
 
@@ -1063,7 +1128,7 @@ func (s *Solid) peformPattern(sp float32) {
 
 	mov := anon(s.CPattern, s.MPattern)
 	if mov != nil && s.Position != nil {
-		s.Facing.Orientation = mov.Orientation
+		s.Orientation = &mov.Orientation
 		s.Velocity = &mov.Orientation
 		s.procMovement(sp)
 		s.CPattern += uint32(sp)
@@ -1095,42 +1160,41 @@ func PlayDialog(listener *Solid, speaker *Solid) {
 	}
 }
 
-func (s *Solid) CurrentFacing() *Animation {
+func (ch *Char) CurrentFacing() *Animation {
 
-	if s.Facing.Orientation.X == 0 && s.Facing.Orientation.Y == -1 {
-		return s.Facing.Up
+	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == 1 {
+		return ch.ActionMap.DOWN
 	}
 
-	if s.Facing.Orientation.X == -1 && s.Facing.Orientation.Y == 0 {
-		return s.Facing.Left
+	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == -1 {
+		return ch.ActionMap.UP
 	}
 
-	if s.Facing.Orientation.X == 1 && s.Facing.Orientation.Y == 0 {
-		return s.Facing.Right
+	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 0 {
+		return ch.ActionMap.LEFT
 	}
 
-	if s.Facing.Orientation.X == 1 && s.Facing.Orientation.Y == 1 {
-		return s.Facing.DownRight
+	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 0 {
+		return ch.ActionMap.RIGHT
 	}
 
-	if s.Facing.Orientation.X == 1 && s.Facing.Orientation.Y == -1 {
-		return s.Facing.UpRight
+	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 1 {
+		return ch.ActionMap.DR
 	}
 
-	if s.Facing.Orientation.X == -1 && s.Facing.Orientation.Y == 1 {
-		return s.Facing.DownLeft
+	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == -1 {
+		return ch.ActionMap.UR
 	}
 
-	if s.Facing.Orientation.X == -1 && s.Facing.Orientation.Y == -1 {
-		return s.Facing.UpLeft
+	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 1 {
+		return ch.ActionMap.DL
 	}
 
-	return s.Facing.Down
-}
+	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == -1 {
+		return ch.ActionMap.UL
+	}
 
-func applyMov(p *sdl.Rect, o Vector2d, s float32) {
-	p.X += int32(o.X * s)
-	p.Y += int32(o.Y * s)
+	return ch.ActionMap.DOWN
 }
 
 func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
@@ -1178,7 +1242,6 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 func (s *Solid) Destroy() {
 	s.Position = nil
 	s.Source = nil
-	s.Facing = Facing{}
 	s.Anim = nil
 	s.Handlers = nil
 	s.Txt = nil
@@ -1297,8 +1360,8 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 
 	dbg_content := fmt.Sprintf(
 		"px %d py %d|vx %.1f vy %.1f (%.1f, %.1f) An:%d/%d/%d cull %d i %d cX %.1f cY %.1f L %dus ETick%d AiTick%d",
-		PC.Solid.Position.X, PC.Solid.Position.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Facing.Orientation.X,
-		PC.Solid.Facing.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
+		PC.Solid.Position.X, PC.Solid.Position.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Orientation.X,
+		PC.Solid.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
 		len(Interactive), Cam.P.X, Cam.P.Y, game_latency, EventTick, AiTick,
 	)
 	dbg_TextEl := TextEl{
@@ -1362,12 +1425,11 @@ func (ch *Char) depletHP(dmg float32) {
 }
 
 func (c *Char) PushBack(d float32) {
-	f := c.Solid.Facing.Orientation
+	f := c.Solid.Orientation
 	c.Solid.Position.X -= int32(f.X * d * 4)
 	c.Solid.Position.Y -= int32(f.Y * d * 4)
-	if c.Solid.Facing.PushBack != nil {
-		c.Solid.SetAnimation(MAN_PB_ANIM)
-	}
+	// TODO WIRE PB ANIM
+	c.Solid.SetAnimation(MAN_PB_ANIM)
 }
 
 func BashDoor(actor *Solid, door *Solid) {
@@ -1394,8 +1456,8 @@ func main() {
 	spritesheetImg, _ := img.Load("assets/textures/main_char.png")
 	powerupsImg, _ := img.Load("assets/textures/powerups_ts.png")
 	glowImg, _ := img.Load("assets/textures/glowing_ts.png")
-	slimeImg, _ := img.Load("assets/textures/slimes.png")
-	defer slimeImg.Free()
+	monstersImg, _ := img.Load("assets/textures/monsters.png")
+	defer monstersImg.Free()
 	defer tilesetImg.Free()
 	defer spritesheetImg.Free()
 	defer powerupsImg.Free()
@@ -1405,16 +1467,49 @@ func main() {
 	spritesheetTxt, _ = renderer.CreateTextureFromSurface(spritesheetImg)
 	powerupsTxt, _ = renderer.CreateTextureFromSurface(powerupsImg)
 	glowTxt, _ = renderer.CreateTextureFromSurface(glowImg)
-	slimeTxt, _ = renderer.CreateTextureFromSurface(slimeImg)
+	monstersTxt, _ = renderer.CreateTextureFromSurface(monstersImg)
 	defer tilesetTxt.Destroy()
 	defer spritesheetTxt.Destroy()
 	defer powerupsTxt.Destroy()
 	defer glowTxt.Destroy()
-	defer slimeTxt.Destroy()
+	defer monstersTxt.Destroy()
 
 	GreenBlob.Txtr = powerupsTxt
 	CrystalizedJelly.Txtr = powerupsTxt
-	SlimeTPL.Txtr = slimeTxt
+	SlimeTPL.Txtr = monstersTxt
+
+	BatSS := &SpriteSheet{monstersTxt, 0, 0, 48, 48}
+	BatActionMap := BatSS.BuildBasicActions(3, false)
+	OrcSS := &SpriteSheet{monstersTxt, 288, 0, 48, 48}
+	OrcActionMap := OrcSS.BuildBasicActions(3, false)
+
+	MainCharSS := &SpriteSheet{spritesheetTxt, 0, 0, 32, 32}
+	MainCharActionMap := MainCharSS.BuildBasicActions(3, true)
+	PC.ActionMap = MainCharActionMap
+
+	BatTPL = MonsterTemplate{
+		Txtr:          monstersTxt,
+		ActionMap:     BatActionMap,
+		Loot:          [8]Loot{{CrystalizedJelly, 0.5}, {GreenBlob, 0.5}},
+		Lvl:           1,
+		HP:            25,
+		LoS:           90,
+		Size:          32,
+		LvlVariance:   0.3,
+		ScalingFactor: 0.6,
+	}
+
+	OrcTPL = MonsterTemplate{
+		Txtr:          monstersTxt,
+		ActionMap:     OrcActionMap,
+		Loot:          [8]Loot{},
+		Lvl:           1,
+		HP:            70,
+		LoS:           120,
+		Size:          32,
+		LvlVariance:   0.5,
+		ScalingFactor: 0.1,
+	}
 
 	var running bool = true
 
@@ -1462,14 +1557,12 @@ type SpawnPoint struct {
 	Position  *sdl.Rect
 	Frequency uint16
 	LvlMod    uint8
-	//SpawnList []*SpawnCfg
 }
 
 func (sp *SpawnPoint) Produce() {
 	px := float32(rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X)
 	py := float32(rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y)
-
-	mon := MonsterFactory(&SlimeTPL, sp.LvlMod, Vector2d{px, py})
+	mon := MonsterFactory(&OrcTPL, sp.LvlMod, Vector2d{px, py})
 
 	Monsters = append(Monsters, mon)
 }
@@ -1497,11 +1590,11 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 	mon := Char{
 		Lvl: lvl,
 		Solid: &Solid{
-			Position:  &sdl.Rect{int32(pos.X), int32(pos.Y), W, H},
-			Velocity:  &Vector2d{0, 0},
-			Txt:       monsterTpl.Txtr,
-			Collision: 2,
-			Facing:    DEFAULT_FACING,
+			Position:    &sdl.Rect{int32(pos.X), int32(pos.Y), W, H},
+			Velocity:    &Vector2d{0, 0},
+			Orientation: &Vector2d{0, 0},
+			Txt:         monsterTpl.Txtr,
+			Collision:   2,
 			Handlers: &InteractionHandlers{
 				OnCollDmg: 12,
 			},
@@ -1515,13 +1608,14 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 			},
 			Chase: PC.Solid,
 		},
+		ActionMap: monsterTpl.ActionMap,
 		Speed:     1,
 		BaseSpeed: 1,
 		CurrentHP: hp,
 		MaxHP:     hp,
 		Drop:      DropItem,
 	}
-	mon.Solid.SetAnimation(WALK_FRONT_ANIM)
+	mon.Solid.SetAnimation(monsterTpl.ActionMap.DOWN)
 	mon.Solid.CharPtr = &mon
 
 	return &mon
