@@ -1440,8 +1440,8 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 
 	// TEMP? - EXPERIMENT WITH CAMERA ALWAYS FOLLOWING
 	scrPos := worldToScreen(PC.Solid.Position, Cam)
-	Cam.P.X = (scrPos.X - winWidth/2) + scrPos.W/2
-	Cam.P.Y = (scrPos.Y - winHeight/2) + scrPos.H/2
+	Cam.P.X = float32((scrPos.X - winWidth/2) + scrPos.W/2)
+	Cam.P.Y = float32((scrPos.Y - winHeight/2) + scrPos.H/2)
 
 	s._terrainRender(renderer)
 	s._solidsRender(renderer)
