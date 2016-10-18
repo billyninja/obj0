@@ -12,11 +12,15 @@ import (
 )
 
 const (
+	winTitle            string  = "Go-SDL2 Obj0"
 	TSz                 float32 = 32
+	CharSize            int32   = 64
 	TSzi                int32   = int32(TSz)
-	winWidth, winHeight int32   = 1280, 960
+	winWidth, winHeight int32   = 1280, 720
 	cY                          = winHeight / TSzi
 	cX                          = winWidth / TSzi
+	CenterX                     = winWidth / 2
+	CenterY                     = winHeight / 2
 	WORLD_CELLS_X               = 500
 	WORLD_CELLS_Y               = 200
 	KEY_ARROW_UP                = 1073741906
@@ -32,7 +36,6 @@ const (
 )
 
 var (
-	winTitle     string = "Go-SDL2 Obj0"
 	event        sdl.Event
 	font         *ttf.Font
 	game_latency time.Duration
@@ -109,21 +112,6 @@ var (
 	BatTPL MonsterTemplate = MonsterTemplate{}
 	OrcTPL MonsterTemplate = MonsterTemplate{}
 
-	LAVA_HANDLERS = &InteractionHandlers{
-		OnCollDmg: 12,
-	}
-
-	ATK_UP *PowerUp = &PowerUp{
-		Name:        "Attack up!",
-		Description: "+20% dgm. dealed",
-		Ico:         BF_ATK_UP,
-	}
-	DEF_UP *PowerUp = &PowerUp{
-		Name:        "Defense up!",
-		Description: "+20% dgm. reduction",
-		Ico:         BF_DEF_UP,
-	}
-
 	SCN_PLAINS *Scene = &Scene{
 		codename:   "plains",
 		CellsX:     50,
@@ -143,15 +131,9 @@ var (
 		tileB:      LAVA_S1,
 	}
 
-	SCENES []*Scene = []*Scene{
-		SCN_PLAINS,
-		SCN_CAVE,
-	}
+	SCENES []*Scene = []*Scene{SCN_PLAINS, SCN_CAVE}
 
-	Cam = Camera{
-		DZx: 30,
-		DZy: 60,
-	}
+	Cam = Camera{Vector2d{0, 0}, 512, 256}
 
 	PC = Char{
 		Solid: &Solid{
@@ -162,7 +144,6 @@ var (
 		Lvl:       1,
 		CurrentXP: 0,
 		NextLvlXP: 100,
-		Buffs:     []*PowerUp{ATK_UP, DEF_UP},
 		BaseSpeed: 3,
 		Speed:     3,
 		CurrentHP: 220,
@@ -172,6 +153,35 @@ var (
 		Inventory: []*ItemStack{{GreenBlob, 2}},
 	}
 
+	GreenBlob *Item = &Item{
+		Name:        "Green Blob",
+		Description: "A chunck of slime.",
+		Txtr:        powerupsTxt,
+		Source:      &sdl.Rect{0, 0, 24, 24},
+	}
+	CrystalizedJelly *Item = &Item{
+		Name:        "Crystalized Jelly",
+		Description: "Some believe that the Slime's soul live within it",
+		Txtr:        powerupsTxt,
+		Source:      &sdl.Rect{24, 0, 24, 24},
+		Weight:      2,
+		BaseValue:   10,
+	}
+
+	SlimeTPL MonsterTemplate = MonsterTemplate{
+		Txtr:          monstersTxt,
+		Lvl:           1,
+		HP:            25,
+		LoS:           90,
+		Size:          32,
+		LvlVariance:   0.3,
+		ScalingFactor: 0.6,
+		Loot: [8]Loot{
+			{CrystalizedJelly, 0.5},
+			{GreenBlob, 0.5},
+		},
+	}
+
 	scene       *Scene
 	World       [][]*sdl.Rect
 	Interactive []*Solid
@@ -179,11 +189,20 @@ var (
 	Monsters    []*Char
 	GUI         []*sdl.Rect
 	CullMap     []*Solid
+	dbox        DBox  = DBox{BGColor: sdl.Color{90, 90, 90, 255}}
+	EventTick   uint8 = EVENT_TICK_LENGTH
+	AiTick            = AI_TICK_LENGTH
 )
 
 type Vector2d struct {
 	X float32
 	Y float32
+}
+
+type Camera struct {
+	P   Vector2d
+	DZx int32
+	DZy int32
 }
 
 type Scene struct {
@@ -195,12 +214,6 @@ type Scene struct {
 	CamPoint   Vector2d
 	tileA      *sdl.Rect
 	tileB      *sdl.Rect
-}
-
-type Camera struct {
-	P   Vector2d
-	DZx int32
-	DZy int32
 }
 
 type Event func(source *Solid, subject *Solid)
@@ -229,11 +242,16 @@ type Loot struct {
 	Perc float32
 }
 
-type MonsterTemplate struct {
-	Txtr        *sdl.Texture
-	ActionMap   *ActionMap
-	SpriteSheet *SpriteSheet
+type SpawnPoint struct {
+	Position  *sdl.Rect
+	Frequency uint16
+	LvlMod    uint8
+}
 
+type MonsterTemplate struct {
+	Txtr          *sdl.Texture
+	ActionMap     *ActionMap
+	SpriteSheet   *SpriteSheet
 	Lvl           uint8
 	HP            float32
 	Size          int32
@@ -270,6 +288,84 @@ type SpriteSheet struct {
 	StY   int32
 	StepW int32
 	StepH int32
+}
+
+type InteractionHandlers struct {
+	OnCollDmg      float32
+	OnCollPushBack int32
+	OnCollEvent    Event
+	OnPickUp       Event
+	OnActDmg       uint16
+	OnActPush      *Vector2d
+	OnActEvent     Event
+	DialogScript   []string
+	DoorTo         *Scene
+}
+
+type Solid struct {
+	Velocity    *Vector2d
+	Orientation *Vector2d
+	Position    *sdl.Rect
+	Source      *sdl.Rect
+	Anim        *Animation
+	Handlers    *InteractionHandlers
+	Txt         *sdl.Texture
+	Ttl         int64
+	Collision   uint8
+
+	// AI RELATED
+	CPattern uint32
+	MPattern []Movement
+	Chase    *Solid
+	CharPtr  *Char
+	ItemPtr  *Item
+	LoS      int32
+}
+
+type Animation struct {
+	Action   [8]*sdl.Rect
+	Pose     uint8
+	PoseTick uint32
+	PlayMode uint8
+	After    Event
+}
+
+type Movement struct {
+	Orientation Vector2d
+	Ticks       uint8
+}
+
+type Char struct {
+	Solid     *Solid
+	ActionMap *ActionMap
+	Inventory []*ItemStack
+	//---
+	BaseSpeed float32
+	Speed     float32
+	Lvl       uint8
+	CurrentXP uint16
+	NextLvlXP uint16
+	CurrentHP float32
+	MaxHP     float32
+	CurrentST float32
+	MaxST     float32
+	Drop      *Item
+	Invinc    int64
+}
+
+type TextEl struct {
+	Font         *ttf.Font
+	Content      string
+	Color        sdl.Color
+	BakedContent string
+}
+
+type DBox struct {
+	SPos     uint8
+	CurrText uint8
+	Text     []*TextEl
+	BGColor  sdl.Color
+	Char     *Char
 }
 
 func (ss *SpriteSheet) BuildBasicActions(actLength uint8, hasDiagonals bool) *ActionMap {
@@ -368,126 +464,6 @@ func (ss *SpriteSheet) GetPose(o Vector2d, p uint8) *sdl.Rect {
 	return &sdl.Rect{ss.StX + poseX, ss.StY + poseY, ss.StepW, ss.StepH}
 }
 
-var (
-	GreenBlob *Item = &Item{
-		Name:        "Green Blob",
-		Description: "A chunck of slime.",
-		Txtr:        powerupsTxt,
-		Source:      &sdl.Rect{0, 0, 24, 24},
-	}
-	CrystalizedJelly *Item = &Item{
-		Name:        "Crystalized Jelly",
-		Description: "Some believe that the Slime's soul live within it",
-		Txtr:        powerupsTxt,
-		Source:      &sdl.Rect{24, 0, 24, 24},
-		Weight:      2,
-		BaseValue:   10,
-	}
-
-	SlimeTPL MonsterTemplate = MonsterTemplate{
-		Txtr:          monstersTxt,
-		Lvl:           1,
-		HP:            25,
-		LoS:           90,
-		Size:          32,
-		LvlVariance:   0.3,
-		ScalingFactor: 0.6,
-		Loot: [8]Loot{
-			{CrystalizedJelly, 0.5},
-			{GreenBlob, 0.5},
-		},
-	}
-)
-
-type InteractionHandlers struct {
-	OnCollDmg   float32
-	OnCollPush  *Vector2d
-	OnCollEvent Event
-	OnPickUp    Event
-	OnActDmg    uint16
-
-	OnActPush    *Vector2d
-	OnActEvent   Event
-	DialogScript []string
-	DoorTo       *Scene
-}
-
-type Solid struct {
-	Velocity    *Vector2d
-	Orientation *Vector2d
-	Position    *sdl.Rect
-	Source      *sdl.Rect
-	Anim        *Animation
-	Handlers    *InteractionHandlers
-	Txt         *sdl.Texture
-	Ttl         int64
-	Collision   uint8
-
-	// AI RELATED
-	CPattern uint32
-	MPattern []Movement
-	Chase    *Solid
-	CharPtr  *Char
-	ItemPtr  *Item
-	LoS      int32
-}
-
-type Animation struct {
-	Action   [8]*sdl.Rect
-	Pose     uint8
-	PoseTick uint32
-	PlayMode uint8
-	After    Event
-}
-
-type Movement struct {
-	Orientation Vector2d
-	Ticks       uint8
-}
-
-type PowerUp struct {
-	Code        uint8
-	Name        string
-	Description string
-	Ico         *sdl.Rect
-	IcoTxt      *sdl.Texture
-	Ttl         int64
-}
-
-type Char struct {
-	Solid     *Solid
-	Buffs     []*PowerUp
-	ActionMap *ActionMap
-	Inventory []*ItemStack
-	//---
-	BaseSpeed float32
-	Speed     float32
-	Lvl       uint8
-	CurrentXP uint16
-	NextLvlXP uint16
-	CurrentHP float32
-	MaxHP     float32
-	CurrentST float32
-	MaxST     float32
-	Drop      *Item
-	Invinc    int64
-}
-
-type TextEl struct {
-	Font         *ttf.Font
-	Content      string
-	Color        sdl.Color
-	BakedContent string
-}
-
-type DBox struct {
-	SPos     uint8
-	CurrText uint8
-	Text     []*TextEl
-	BGColor  sdl.Color
-	Char     *Char
-}
-
 func (db *DBox) LoadText(content []string) {
 	db.Text = make([]*TextEl, len(content))
 	for i, s := range content {
@@ -500,7 +476,6 @@ func (db *DBox) LoadText(content []string) {
 }
 
 func (db *DBox) Present(renderer *sdl.Renderer) {
-
 	if len(db.Text) == 0 {
 		return
 	}
@@ -511,10 +486,17 @@ func (db *DBox) Present(renderer *sdl.Renderer) {
 	tr := &sdl.Rect{0, 0, w, h}
 	bt := &sdl.Rect{64, winHeight - 128, w, h}
 
-	renderer.SetDrawColor(db.BGColor.R, db.BGColor.G, db.BGColor.B, db.BGColor.A)
-	renderer.FillRect(br)
-	renderer.Copy(transparencyTxt, &sdl.Rect{0, 0, 48, 48}, bt)
+	renderer.Copy(transparencyTxt, &sdl.Rect{0, 0, 48, 48}, br)
 	renderer.Copy(txtr, tr, bt)
+}
+
+func (t *TextEl) Bake(renderer *sdl.Renderer) (*sdl.Texture, int32, int32) {
+
+	surface, _ := t.Font.RenderUTF8_Blended_Wrapped(t.Content, t.Color, int(winWidth))
+	defer surface.Free()
+	txtr, _ := renderer.CreateTextureFromSurface(surface)
+
+	return txtr, surface.W, surface.H
 }
 
 func ActHitBox(source *sdl.Rect, orientation *Vector2d) *sdl.Rect {
@@ -531,15 +513,6 @@ func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 		r1.X+r1.W > r2.X &&
 		r1.Y < r2.Y+r2.H &&
 		r1.Y+r1.H > r2.Y)
-}
-
-func (t *TextEl) Bake(renderer *sdl.Renderer) (*sdl.Texture, int32, int32) {
-
-	surface, _ := t.Font.RenderUTF8_Blended_Wrapped(t.Content, t.Color, int(winWidth))
-	defer surface.Free()
-	txtr, _ := renderer.CreateTextureFromSurface(surface)
-
-	return txtr, surface.W, surface.H
 }
 
 func actProc() {
@@ -603,6 +576,42 @@ func ReleaseSpell(caster *Solid, tgt *Solid) {
 	Interactive = append(Interactive, h)
 }
 
+func PickUp(picker *Solid, item *Solid) {
+	if item.Handlers != nil && item.Handlers.OnPickUp != nil {
+		item.Handlers.OnPickUp(picker, item)
+	}
+
+	if picker.CharPtr != nil {
+		picker.SetAnimation(MAN_PU_ANIM, nil)
+	}
+
+	item.Destroy()
+}
+
+func AddToInv(picker *Solid, item *Solid) {
+	if picker.CharPtr != nil && item.ItemPtr != nil {
+		for _, iStack := range picker.CharPtr.Inventory {
+			if iStack.ItemTpl == item.ItemPtr {
+				iStack.Qty += 1
+				return
+			}
+		}
+		picker.CharPtr.Inventory = append(picker.CharPtr.Inventory, &ItemStack{item.ItemPtr, 1})
+	}
+}
+
+func PlayDialog(listener *Solid, speaker *Solid) {
+	if len(speaker.Handlers.DialogScript) > 0 {
+		dbox.LoadText(speaker.Handlers.DialogScript)
+	}
+}
+
+func BashDoor(actor *Solid, door *Solid) {
+	if actor == PC.Solid {
+		change_scene(door.Handlers.DoorTo, nil)
+	}
+}
+
 func (ch *Char) MeleeAtk() {
 	var stCost float32 = 2
 	if stCost > ch.CurrentST {
@@ -629,6 +638,61 @@ func (ch *Char) CastSpell() {
 	ch.Solid.SetAnimation(MAN_CS_ANIM, ReleaseSpell)
 }
 
+func (ch *Char) CurrentFacing() *Animation {
+
+	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == 1 {
+		return ch.ActionMap.DOWN
+	}
+
+	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == -1 {
+		return ch.ActionMap.UP
+	}
+
+	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 0 {
+		return ch.ActionMap.LEFT
+	}
+
+	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 0 {
+		return ch.ActionMap.RIGHT
+	}
+
+	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 1 {
+		return ch.ActionMap.DR
+	}
+
+	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == -1 {
+		return ch.ActionMap.UR
+	}
+
+	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 1 {
+		return ch.ActionMap.DL
+	}
+
+	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == -1 {
+		return ch.ActionMap.UL
+	}
+
+	return ch.ActionMap.DOWN
+}
+
+func (ch *Char) depletHP(dmg float32) {
+	if ch.Invinc > 0 {
+		return
+	}
+	if dmg > ch.CurrentHP {
+		ch.CurrentHP = 0
+	} else {
+		ch.CurrentHP -= dmg
+	}
+}
+
+func (ch *Char) PushBack(d int32, o *Vector2d) {
+	ch.Solid.Position.X += int32(o.X) * d
+	ch.Solid.Position.Y += int32(o.Y) * d
+	// TODO WIRE PB ANIM into the ActionMap
+	ch.Solid.SetAnimation(MAN_PB_ANIM, nil)
+}
+
 func (db *DBox) NextText() bool {
 	if len(dbox.Text) == 0 {
 		return false
@@ -639,52 +703,6 @@ func (db *DBox) NextText() bool {
 		dbox.CurrText = 0
 	}
 	return true
-}
-
-func handleKeyEvent(key sdl.Keycode) Vector2d {
-	N := Vector2d{0, 0}
-	switch key {
-	case KEY_SPACE_BAR:
-		if !dbox.NextText() {
-			actProc()
-		}
-		return N
-	case KEY_LEFT_SHIT:
-		PC.Speed = (PC.BaseSpeed * 2)
-	case KEY_ARROW_UP:
-		return F_UP
-	case KEY_ARROW_DOWN:
-		return F_DOWN
-	case KEY_ARROW_LEFT:
-		return F_LEFT
-	case KEY_ARROW_RIGHT:
-		return F_RIGHT
-	}
-
-	return N
-}
-
-func handleKeyUpEvent(key sdl.Keycode) {
-	switch key {
-	case KEY_X:
-		if PC.Solid.Anim.PlayMode != 1 {
-			PC.MeleeAtk()
-		}
-	case KEY_C:
-		if PC.Solid.Anim.PlayMode != 1 {
-			PC.CastSpell()
-		}
-	case KEY_LEFT_SHIT:
-		PC.Speed = PC.BaseSpeed
-	case KEY_ARROW_UP:
-		PC.Solid.Velocity.Y = 0
-	case KEY_ARROW_DOWN:
-		PC.Solid.Velocity.Y = 0
-	case KEY_ARROW_LEFT:
-		PC.Solid.Velocity.X = 0
-	case KEY_ARROW_RIGHT:
-		PC.Solid.Velocity.X = 0
-	}
 }
 
 func (s *Solid) SetAnimation(an *Animation, evt Event) {
@@ -710,9 +728,6 @@ func (s *Solid) PlayAnimation() {
 			if anim != nil && s.Anim.Pose <= prvPose && s.Anim.PlayMode == 1 {
 				if s.Anim.After != nil {
 					s.Anim.After(s, nil)
-				}
-				if PC.Solid != s {
-					println(anim, s.CharPtr.ActionMap.DOWN, MAN_PB_ANIM)
 				}
 				s.SetAnimation(anim, nil)
 			}
@@ -770,69 +785,94 @@ func (s *Solid) procMovement(speed float32) {
 	s.Position = np
 }
 
-func catchEvents() bool {
-	var c bool
-
-	if PC.Solid.Anim.PlayMode == 1 {
-		PC.Solid.PlayAnimation()
+func (s *Solid) LoSCheck() bool {
+	LoS := &sdl.Rect{
+		s.Position.X - s.LoS,
+		s.Position.Y - s.LoS,
+		s.Position.W + (s.LoS * 2),
+		s.Position.H + (s.LoS * 2),
 	}
 
-	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-		switch t := event.(type) {
-		case *sdl.QuitEvent:
-			return false
-		case *sdl.KeyDownEvent:
-			v := handleKeyEvent(t.Keysym.Sym)
-
-			if v.X != 0 {
-				PC.Solid.Velocity.X = v.X
-				PC.Solid.Orientation.X = v.X
-				c = true
-			}
-			if v.Y != 0 {
-				PC.Solid.Velocity.Y = v.Y
-				PC.Solid.Orientation.Y = v.Y
-				c = true
-			}
-		case *sdl.KeyUpEvent:
-			handleKeyUpEvent(t.Keysym.Sym)
-		}
+	if !checkCol(PC.Solid.Position, LoS) {
+		return false
 	}
-
-	if c && PC.Solid.Anim.PlayMode == 0 {
-		PC.Solid.PlayAnimation()
-		PC.Solid.procMovement(PC.Speed)
-	}
-
-	if isMoving(PC.Solid.Velocity) && PC.Speed > PC.BaseSpeed {
-		dpl := (PC.MaxST * 0.0009)
-
-		if PC.CurrentST <= dpl {
-			PC.CurrentST = 0
-			PC.Speed = PC.BaseSpeed
-		} else {
-			PC.CurrentST -= dpl
-		}
-
-	} else {
-		if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
-			PC.CurrentST += (PC.MaxST * 0.001)
-		}
-	}
-
 	return true
 }
 
-func isMoving(vel *Vector2d) bool {
-	return (vel.X != 0 || vel.Y != 0)
+func (s *Solid) chase() {
+
+	s.Velocity.X = 0
+	s.Velocity.Y = 0
+
+	diffX := math.Abs(float64(s.Position.X - s.Chase.Position.X))
+	diffY := math.Abs(float64(s.Position.Y - s.Chase.Position.Y))
+
+	if s.Position.X > s.Chase.Position.X {
+		s.Velocity.X = -1
+	}
+
+	if s.Position.X < s.Chase.Position.X {
+		s.Velocity.X = 1
+	}
+	if s.Position.Y > s.Chase.Position.Y {
+		s.Velocity.Y = -1
+	}
+
+	if s.Position.Y < s.Chase.Position.Y {
+		s.Velocity.Y = 1
+	}
+
+	if diffX < 36 && diffY < 36 {
+		*s.Orientation = *s.Velocity
+		r := ActHitBox(s.Position, s.Orientation)
+		if checkCol(r, PC.Solid.Position) {
+			PC.depletHP(s.Handlers.OnCollDmg)
+		}
+	} else {
+		s.procMovement(s.CharPtr.Speed)
+	}
+
+	return
 }
 
-func getNextPose(action [8]*sdl.Rect, currPose uint8) uint8 {
-	if action[currPose+1] == nil {
-		return 0
-	} else {
-		return currPose + 1
+func (s *Solid) peformPattern(sp float32) {
+	anon := func(c uint32, mvs []Movement) *Movement {
+		var sum uint32 = 0
+		for _, mp := range mvs {
+			sum += uint32(mp.Ticks)
+			if sum > s.CPattern {
+				return &mp
+			}
+		}
+		s.CPattern = 0
+		return nil
 	}
+
+	mov := anon(s.CPattern, s.MPattern)
+	if mov != nil && s.Position != nil {
+		s.Orientation = &mov.Orientation
+		s.Velocity = &mov.Orientation
+		s.procMovement(sp)
+		s.CPattern += uint32(sp)
+	}
+}
+
+func (s *Solid) Destroy() {
+	s.Position = nil
+	s.Source = nil
+	s.Anim = nil
+	s.Handlers = nil
+	s.Txt = nil
+	s.Collision = 0
+}
+
+func change_scene(new_scene *Scene, staring_pos *Vector2d) {
+	new_scene.build()
+	Interactive = []*Solid{}
+	new_scene.populate(200)
+	scene = new_scene
+
+	PC.Solid.Position = V2R(new_scene.StartPoint, CharSize, CharSize)
 }
 
 func (s *Scene) build() {
@@ -879,10 +919,13 @@ func (s *Scene) populate(population int) {
 		switch rand.Int31n(9) {
 		case 1:
 			sol = &Solid{
-				Position:  absolute_pos,
-				Txt:       s.TileSet,
-				Anim:      LAVA_ANIM,
-				Handlers:  LAVA_HANDLERS,
+				Position: absolute_pos,
+				Txt:      s.TileSet,
+				Anim:     LAVA_ANIM,
+				Handlers: &InteractionHandlers{
+					OnCollDmg:      12,
+					OnCollPushBack: 16,
+				},
 				Collision: 0,
 			}
 			Interactive = append(Interactive, sol)
@@ -910,7 +953,7 @@ func (s *Scene) populate(population int) {
 				Anim:      LIFE_ORB_ANIM,
 				Collision: 0,
 				Handlers: &InteractionHandlers{
-					OnCollEvent: pickUp,
+					OnCollEvent: PickUp,
 					OnPickUp: func(healed *Solid, orb *Solid) {
 						if healed.CharPtr != nil {
 							healed.CharPtr.CurrentHP += 10
@@ -973,301 +1016,9 @@ func (s *Scene) populate(population int) {
 	}
 }
 
-var (
-	EventTick uint8 = EVENT_TICK_LENGTH
-	AiTick          = AI_TICK_LENGTH
-	dbox      DBox  = DBox{BGColor: sdl.Color{90, 90, 90, 255}}
-)
-
-func PlaceDrop(item *Item, origin *sdl.Rect) {
-	instance := ItemInstance{
-		ItemTpl: item,
-		Solid: &Solid{
-			ItemPtr: item,
-			Txt:     item.Txtr,
-			Source:  item.Source,
-			Position: &sdl.Rect{
-				origin.X,
-				origin.Y,
-				item.Source.W,
-				item.Source.H,
-			},
-			Handlers: &InteractionHandlers{
-				OnActEvent: pickUp,
-				OnPickUp:   addToInv,
-			},
-		},
-	}
-
-	Interactive = append(Interactive, instance.Solid)
-}
-
-func (s *Scene) update() {
-	EventTick -= 1
-	AiTick -= 1
-
-	now := time.Now().Unix()
-
-	if PC.Invinc > 0 && now > PC.Invinc {
-		println("pc invincibility ended!")
-		PC.Invinc = 0
-	}
-
-	if len(dbox.Text) > 0 {
-		AiTick = AI_TICK_LENGTH
-	}
-
-	newScreenPos := worldToScreen(PC.Solid.Position, Cam)
-	if (Cam.DZx - newScreenPos.X) > 0 {
-		Cam.P.X -= float32(Cam.DZx - newScreenPos.X)
-	}
-
-	if (winWidth - Cam.DZx) < (newScreenPos.X + TSzi) {
-		Cam.P.X += float32((newScreenPos.X + TSzi) - (winWidth - Cam.DZx))
-	}
-
-	if (Cam.DZy - newScreenPos.Y) > 0 {
-		Cam.P.Y -= float32(Cam.DZy - newScreenPos.Y)
-	}
-
-	if (winHeight - Cam.DZy) < (newScreenPos.Y + TSzi) {
-		Cam.P.Y += float32((newScreenPos.Y + TSzi) - (winHeight - Cam.DZy))
-	}
-
-	for _, cObj := range CullMap {
-		// Ttl kill
-		if cObj.Ttl > 0 && cObj.Ttl < now {
-			cObj.Destroy()
-			continue
-		}
-
-		// Kill logic
-		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
-
-			if cObj.CharPtr.Drop != nil {
-				PlaceDrop(cObj.CharPtr.Drop, cObj.Position)
-			}
-
-			cObj.Destroy()
-
-			PC.CurrentXP += uint16(cObj.CharPtr.MaxHP / 10)
-			if PC.CurrentXP >= PC.NextLvlXP {
-				PC.CurrentXP = 0
-				PC.Lvl++
-				PC.NextLvlXP = PC.NextLvlXP * uint16(1+PC.Lvl/2)
-			}
-			continue
-		}
-
-		if cObj.Anim != nil {
-			cObj.PlayAnimation()
-		}
-
-		if cObj.Handlers != nil && EventTick == 0 {
-			fr := feetRect(PC.Solid.Position)
-			if checkCol(fr, cObj.Position) {
-				if cObj.Handlers.OnCollDmg != 0 {
-					PC.depletHP(cObj.Handlers.OnCollDmg)
-					if cObj.Orientation == nil {
-						cObj.Orientation = &Vector2d{PC.Solid.Orientation.X * -1, PC.Solid.Orientation.Y * -1}
-					}
-					PC.PushBack(cObj.Handlers.OnCollDmg, cObj.Orientation)
-
-					if PC.Invinc == 0 {
-						PC.Invinc = time.Now().Add(2 * time.Second).Unix()
-					}
-				}
-				if cObj.Handlers.OnCollEvent != nil {
-					cObj.Handlers.OnCollEvent(PC.Solid, cObj)
-				}
-			}
-		}
-
-		if AiTick == 0 {
-			if cObj.Anim != nil && cObj.Anim.PlayMode == 1 {
-				continue
-			}
-			if cObj.Chase != nil && cObj.LoSCheck() {
-				cObj.chase()
-			} else {
-				cObj.peformPattern(1)
-			}
-		}
-	}
-
-	if EventTick == 0 {
-		for _, spw := range Spawners {
-			if spw.Frequency <= 0 {
-				spw.Frequency += 1
-			}
-
-			if uint16(rand.Int31n(1000)) < spw.Frequency {
-				spw.Produce()
-				spw.Frequency -= 1
-			}
-		}
-
-		EventTick = EVENT_TICK_LENGTH
-	}
-
-	if AiTick == 0 {
-		AiTick = AI_TICK_LENGTH
-	}
-
-} // end update()
-
-func (s *Solid) LoSCheck() bool {
-	LoS := &sdl.Rect{
-		s.Position.X - s.LoS,
-		s.Position.Y - s.LoS,
-		s.Position.W + (s.LoS * 2),
-		s.Position.H + (s.LoS * 2),
-	}
-
-	if !checkCol(PC.Solid.Position, LoS) {
-		return false
-	}
-	return true
-}
-
-func (s *Solid) chase() {
-
-	s.Velocity.X = 0
-	s.Velocity.Y = 0
-
-	diffX := math.Abs(float64(s.Position.X - s.Chase.Position.X))
-	diffY := math.Abs(float64(s.Position.Y - s.Chase.Position.Y))
-
-	if s.Position.X > s.Chase.Position.X {
-		s.Velocity.X = -1
-	}
-
-	if s.Position.X < s.Chase.Position.X {
-		s.Velocity.X = 1
-	}
-	if s.Position.Y > s.Chase.Position.Y {
-		s.Velocity.Y = -1
-	}
-
-	if s.Position.Y < s.Chase.Position.Y {
-		s.Velocity.Y = 1
-	}
-
-	if diffX < 36 && diffY < 36 {
-		*s.Orientation = *s.Velocity
-		r := ActHitBox(s.Position, s.Orientation)
-		if checkCol(r, PC.Solid.Position) {
-			PC.depletHP(s.Handlers.OnCollDmg)
-			PC.PushBack(s.Handlers.OnCollDmg, s.Orientation)
-		}
-
-	} else {
-		s.procMovement(s.CharPtr.Speed)
-	}
-
-	return
-}
-
-func (s *Solid) peformPattern(sp float32) {
-	anon := func(c uint32, mvs []Movement) *Movement {
-		var sum uint32 = 0
-		for _, mp := range mvs {
-			sum += uint32(mp.Ticks)
-			if sum > s.CPattern {
-				return &mp
-			}
-		}
-		s.CPattern = 0
-		return nil
-	}
-
-	mov := anon(s.CPattern, s.MPattern)
-	if mov != nil && s.Position != nil {
-		s.Orientation = &mov.Orientation
-		s.Velocity = &mov.Orientation
-		s.procMovement(sp)
-		s.CPattern += uint32(sp)
-	}
-}
-
-func pickUp(picker *Solid, item *Solid) {
-	if item.Handlers != nil && item.Handlers.OnPickUp != nil {
-		item.Handlers.OnPickUp(picker, item)
-	}
-
-	if picker.CharPtr != nil {
-		picker.SetAnimation(MAN_PU_ANIM, nil)
-	}
-
-	item.Destroy()
-}
-
-func addToInv(picker *Solid, item *Solid) {
-	if picker.CharPtr != nil && item.ItemPtr != nil {
-		for _, iStack := range picker.CharPtr.Inventory {
-			if iStack.ItemTpl == item.ItemPtr {
-				iStack.Qty += 1
-				return
-			}
-		}
-		picker.CharPtr.Inventory = append(picker.CharPtr.Inventory, &ItemStack{item.ItemPtr, 1})
-	}
-}
-
-func PlayDialog(listener *Solid, speaker *Solid) {
-	if len(speaker.Handlers.DialogScript) > 0 {
-		dbox.LoadText(speaker.Handlers.DialogScript)
-	}
-}
-
-func (ch *Char) CurrentFacing() *Animation {
-
-	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == 1 {
-		return ch.ActionMap.DOWN
-	}
-
-	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == -1 {
-		return ch.ActionMap.UP
-	}
-
-	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 0 {
-		return ch.ActionMap.LEFT
-	}
-
-	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 0 {
-		return ch.ActionMap.RIGHT
-	}
-
-	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 1 {
-		return ch.ActionMap.DR
-	}
-
-	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == -1 {
-		return ch.ActionMap.UR
-	}
-
-	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 1 {
-		return ch.ActionMap.DL
-	}
-
-	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == -1 {
-		return ch.ActionMap.UL
-	}
-
-	return ch.ActionMap.DOWN
-}
-
 func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 	var Source *sdl.Rect
 	var init int32 = 0
-
-	if Cam.P.X < 0 {
-		Cam.P.X = 0
-	}
-
-	if Cam.P.Y < 0 {
-		Cam.P.Y = 0
-	}
 
 	var offsetX, offsetY int32 = TSzi, TSzi
 	// Rendering the terrain
@@ -1297,15 +1048,6 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 			renderer.Copy(s.TileSet, Source, &screenPos)
 		}
 	}
-}
-
-func (s *Solid) Destroy() {
-	s.Position = nil
-	s.Source = nil
-	s.Anim = nil
-	s.Handlers = nil
-	s.Txt = nil
-	s.Collision = 0
 }
 
 func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
@@ -1413,21 +1155,7 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	}
 	lvl_txtr, W, H := lvl_TextEl.Bake(renderer)
 	renderer.Copy(lvl_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{128, 60, W, H})
-
-	dbg_content := fmt.Sprintf(
-		"px %d py %d|vx %.1f vy %.1f (%.1f, %.1f) An:%d/%d/%d cull %d i %d cX %.1f cY %.1f L %dus ETick%d AiTick%d",
-		PC.Solid.Position.X, PC.Solid.Position.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Orientation.X,
-		PC.Solid.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
-		len(Interactive), Cam.P.X, Cam.P.Y, game_latency, EventTick, AiTick,
-	)
-	dbg_TextEl := TextEl{
-		Font:    font,
-		Content: dbg_content,
-		Color:   sdl.Color{255, 255, 255, 255},
-	}
-	dbg_txtr, W, H := dbg_TextEl.Bake(renderer)
-	renderer.Copy(dbg_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{0, winHeight - H, W, H})
-
+	debug_info(renderer)
 	dbox.Present(renderer)
 
 	for _, spw := range Spawners {
@@ -1437,11 +1165,7 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 
 func (s *Scene) render(renderer *sdl.Renderer) {
 	renderer.Clear()
-
-	// TEMP? - EXPERIMENT WITH CAMERA ALWAYS FOLLOWING
 	scrPos := worldToScreen(PC.Solid.Position, Cam)
-	Cam.P.X = float32((scrPos.X - winWidth/2) + scrPos.W/2)
-	Cam.P.Y = float32((scrPos.Y - winHeight/2) + scrPos.H/2)
 
 	s._terrainRender(renderer)
 	s._solidsRender(renderer)
@@ -1458,6 +1182,139 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 	renderer.Present()
 }
 
+func (s *Scene) update() {
+	EventTick -= 1
+	AiTick -= 1
+
+	now := time.Now().Unix()
+
+	if PC.Invinc > 0 && now > PC.Invinc {
+		println("pc invincibility ended!")
+		PC.Invinc = 0
+	}
+
+	if len(dbox.Text) > 0 {
+		AiTick = AI_TICK_LENGTH
+	}
+
+	newScreenPos := worldToScreen(PC.Solid.Position, Cam)
+	if (Cam.DZx - newScreenPos.X) > 0 {
+		Cam.P.X -= float32(Cam.DZx - newScreenPos.X)
+	}
+
+	if (winWidth - Cam.DZx) < (newScreenPos.X + TSzi) {
+		Cam.P.X += float32((newScreenPos.X + TSzi) - (winWidth - Cam.DZx))
+	}
+
+	if (Cam.DZy - newScreenPos.Y) > 0 {
+		Cam.P.Y -= float32(Cam.DZy - newScreenPos.Y)
+	}
+
+	if (winHeight - Cam.DZy) < (newScreenPos.Y + TSzi) {
+		Cam.P.Y += float32((newScreenPos.Y + TSzi) - (winHeight - Cam.DZy))
+	}
+
+	for _, cObj := range CullMap {
+		// Ttl kill
+		if cObj.Ttl > 0 && cObj.Ttl < now {
+			cObj.Destroy()
+			continue
+		}
+
+		// Kill logic
+		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
+
+			if cObj.CharPtr.Drop != nil {
+				PlaceDrop(cObj.CharPtr.Drop, cObj.Position)
+			}
+
+			cObj.Destroy()
+
+			PC.CurrentXP += uint16(cObj.CharPtr.MaxHP / 10)
+			if PC.CurrentXP >= PC.NextLvlXP {
+				PC.CurrentXP = 0
+				PC.Lvl++
+				PC.NextLvlXP = PC.NextLvlXP * uint16(1+PC.Lvl/2)
+			}
+			continue
+		}
+
+		if cObj.Anim != nil {
+			cObj.PlayAnimation()
+		}
+
+		hnd := cObj.Handlers
+
+		if hnd != nil && EventTick == 0 {
+			fr := feetRect(PC.Solid.Position)
+			if checkCol(fr, cObj.Position) {
+
+				if hnd.OnCollEvent != nil {
+					hnd.OnCollEvent(PC.Solid, cObj)
+				}
+
+				if hnd.OnCollDmg != 0 {
+					PC.depletHP(hnd.OnCollDmg)
+					if cObj.Orientation == nil {
+						cObj.Orientation = &Vector2d{PC.Solid.Orientation.X * -1, PC.Solid.Orientation.Y * -1}
+					}
+					PC.Invinc = time.Now().Add(2 * time.Second).Unix()
+				}
+
+				if hnd.OnCollPushBack != 0 {
+					PC.PushBack(hnd.OnCollPushBack, cObj.Orientation)
+				}
+
+			}
+		}
+
+		if AiTick == 0 {
+			if cObj.Anim != nil && cObj.Anim.PlayMode == 1 {
+				continue
+			}
+			if cObj.Chase != nil && cObj.LoSCheck() {
+				cObj.chase()
+			} else {
+				cObj.peformPattern(1)
+			}
+		}
+	}
+
+	if EventTick == 0 {
+		for _, spw := range Spawners {
+			if spw.Frequency <= 0 {
+				spw.Frequency += 1
+			}
+
+			if uint16(rand.Int31n(1000)) < spw.Frequency {
+				spw.Produce()
+				spw.Frequency -= 1
+			}
+		}
+
+		EventTick = EVENT_TICK_LENGTH
+	}
+
+	if AiTick == 0 {
+		AiTick = AI_TICK_LENGTH
+	}
+} // end update()
+
+func debug_info(renderer *sdl.Renderer) {
+	dbg_content := fmt.Sprintf("px %d py %d|vx %.1f vy %.1f (%.1f, %.1f) An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
+		PC.Solid.Position.X, PC.Solid.Position.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Orientation.X,
+		PC.Solid.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
+		len(Interactive), Cam.P.X, Cam.P.Y, game_latency, EventTick, AiTick)
+
+	dbg_TextEl := TextEl{
+		Font:    font,
+		Content: dbg_content,
+		Color:   sdl.Color{255, 255, 255, 255},
+	}
+	dbg_txtr, W, H := dbg_TextEl.Bake(renderer)
+	renderer.Copy(dbg_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{0, winHeight - H, W, H})
+}
+
 func calcPerc(v1 float32, v2 float32) float32 {
 	return (float32(v1) / float32(v2) * 100)
 }
@@ -1470,30 +1327,213 @@ func worldToScreen(pos *sdl.Rect, cam Camera) *sdl.Rect {
 	}
 }
 
+func isMoving(vel *Vector2d) bool {
+	return (vel.X != 0 || vel.Y != 0)
+}
+
+func getNextPose(action [8]*sdl.Rect, currPose uint8) uint8 {
+	if action[currPose+1] == nil {
+		return 0
+	} else {
+		return currPose + 1
+	}
+}
+
+func PlaceDrop(item *Item, origin *sdl.Rect) {
+	instance := ItemInstance{
+		ItemTpl: item,
+		Solid: &Solid{
+			ItemPtr: item,
+			Txt:     item.Txtr,
+			Source:  item.Source,
+			Position: &sdl.Rect{
+				origin.X,
+				origin.Y,
+				item.Source.W,
+				item.Source.H,
+			},
+			Handlers: &InteractionHandlers{
+				OnActEvent: PickUp,
+				OnPickUp:   AddToInv,
+			},
+		},
+	}
+
+	Interactive = append(Interactive, instance.Solid)
+}
+
 func inScreen(r *sdl.Rect) bool {
 	return (r.X > (r.W*-1) && r.X < winWidth && r.Y > (r.H*-1) && r.Y < winHeight)
 }
 
-func (ch *Char) depletHP(dmg float32) {
-	if ch.Invinc > 0 {
-		return
+func V2R(v Vector2d, w int32, h int32) *sdl.Rect {
+	return &sdl.Rect{int32(v.X), int32(v.Y), w, h}
+}
+
+func feetRect(pos *sdl.Rect) *sdl.Rect {
+	third := pos.H / 3
+	return &sdl.Rect{pos.X, pos.Y + third, pos.W, pos.H - third}
+}
+
+func (sp *SpawnPoint) Produce() {
+	px := float32(rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X)
+	py := float32(rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y)
+	mon := MonsterFactory(&OrcTPL, sp.LvlMod, Vector2d{px, py})
+
+	Monsters = append(Monsters, mon)
+}
+
+func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Char {
+
+	variance := uint8(math.Floor(float64(rand.Float32() * monsterTpl.LvlVariance * 100)))
+	lvl := uint8((monsterTpl.Lvl + lvlMod) + variance)
+	hp := monsterTpl.HP + float32(lvl*2)
+	sizeMod := int32(float32(lvl-monsterTpl.Lvl) * monsterTpl.ScalingFactor)
+	W := (monsterTpl.Size + sizeMod)
+	H := (monsterTpl.Size + sizeMod)
+
+	var DropItem *Item
+	var sumP float32
+	R := rand.Float32()
+	for _, l := range monsterTpl.Loot {
+		sumP += l.Perc
+		if R < sumP {
+			DropItem = l.Item
+			break
+		}
 	}
-	if dmg > ch.CurrentHP {
-		ch.CurrentHP = 0
+
+	mon := Char{
+		Lvl: lvl,
+		Solid: &Solid{
+			Position:    &sdl.Rect{int32(pos.X), int32(pos.Y), W, H},
+			Velocity:    &Vector2d{0, 0},
+			Orientation: &Vector2d{0, 0},
+			Txt:         monsterTpl.Txtr,
+			Collision:   2,
+			Handlers: &InteractionHandlers{
+				OnCollDmg: 12,
+			},
+			CPattern: 0,
+			LoS:      monsterTpl.LoS,
+			MPattern: []Movement{
+				Movement{F_DOWN, 50},
+				Movement{F_UP, 90},
+				Movement{F_RIGHT, 10},
+				Movement{F_LEFT, 10},
+			},
+			Chase: PC.Solid,
+		},
+		ActionMap: monsterTpl.ActionMap,
+		Speed:     1,
+		BaseSpeed: 1,
+		CurrentHP: hp,
+		MaxHP:     hp,
+		Drop:      DropItem,
+	}
+	mon.Solid.SetAnimation(monsterTpl.ActionMap.DOWN, nil)
+	mon.Solid.CharPtr = &mon
+
+	return &mon
+}
+
+func handleKeyEvent(key sdl.Keycode) Vector2d {
+	N := Vector2d{0, 0}
+	switch key {
+	case KEY_SPACE_BAR:
+		if !dbox.NextText() {
+			actProc()
+		}
+		return N
+	case KEY_LEFT_SHIT:
+		PC.Speed = (PC.BaseSpeed * 2)
+	case KEY_ARROW_UP:
+		return F_UP
+	case KEY_ARROW_DOWN:
+		return F_DOWN
+	case KEY_ARROW_LEFT:
+		return F_LEFT
+	case KEY_ARROW_RIGHT:
+		return F_RIGHT
+	}
+
+	return N
+}
+
+func handleKeyUpEvent(key sdl.Keycode) {
+	switch key {
+	case KEY_X:
+		if PC.Solid.Anim.PlayMode != 1 {
+			PC.MeleeAtk()
+		}
+	case KEY_C:
+		if PC.Solid.Anim.PlayMode != 1 {
+			PC.CastSpell()
+		}
+	case KEY_LEFT_SHIT:
+		PC.Speed = PC.BaseSpeed
+	case KEY_ARROW_UP:
+		PC.Solid.Velocity.Y = 0
+	case KEY_ARROW_DOWN:
+		PC.Solid.Velocity.Y = 0
+	case KEY_ARROW_LEFT:
+		PC.Solid.Velocity.X = 0
+	case KEY_ARROW_RIGHT:
+		PC.Solid.Velocity.X = 0
+	}
+}
+
+func catchEvents() bool {
+	var c bool
+
+	if PC.Solid.Anim.PlayMode == 1 {
+		PC.Solid.PlayAnimation()
+	}
+
+	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+		switch t := event.(type) {
+		case *sdl.QuitEvent:
+			return false
+		case *sdl.KeyDownEvent:
+			v := handleKeyEvent(t.Keysym.Sym)
+
+			if v.X != 0 {
+				PC.Solid.Velocity.X = v.X
+				PC.Solid.Orientation.X = v.X
+				c = true
+			}
+			if v.Y != 0 {
+				PC.Solid.Velocity.Y = v.Y
+				PC.Solid.Orientation.Y = v.Y
+				c = true
+			}
+		case *sdl.KeyUpEvent:
+			handleKeyUpEvent(t.Keysym.Sym)
+		}
+	}
+
+	if c && PC.Solid.Anim.PlayMode == 0 {
+		PC.Solid.PlayAnimation()
+		PC.Solid.procMovement(PC.Speed)
+	}
+
+	if isMoving(PC.Solid.Velocity) && PC.Speed > PC.BaseSpeed {
+		dpl := (PC.MaxST * 0.0009)
+
+		if PC.CurrentST <= dpl {
+			PC.CurrentST = 0
+			PC.Speed = PC.BaseSpeed
+		} else {
+			PC.CurrentST -= dpl
+		}
+
 	} else {
-		ch.CurrentHP -= dmg
+		if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
+			PC.CurrentST += (PC.MaxST * 0.001)
+		}
 	}
-}
 
-func (c *Char) PushBack(d float32, o *Vector2d) {
-	c.Solid.Position.X += int32(o.X * d * 2)
-	c.Solid.Position.Y += int32(o.Y * d * 2)
-	// TODO WIRE PB ANIM into the ActionMap
-	c.Solid.SetAnimation(MAN_PB_ANIM, nil)
-}
-
-func BashDoor(actor *Solid, door *Solid) {
-	change_scene(door.Handlers.DoorTo, nil)
+	return true
 }
 
 func main() {
@@ -1566,10 +1606,10 @@ func main() {
 	OrcTPL = MonsterTemplate{
 		Txtr:          monstersTxt,
 		ActionMap:     OrcActionMap,
-		Loot:          [8]Loot{},
-		Lvl:           1,
+		Loot:          [8]Loot{{CrystalizedJelly, 0.5}, {GreenBlob, 0.5}},
+		Lvl:           5,
 		HP:            70,
-		LoS:           120,
+		LoS:           100,
 		Size:          64,
 		LvlVariance:   0.5,
 		ScalingFactor: 0.1,
@@ -1597,90 +1637,4 @@ func main() {
 
 		sdl.Delay(24)
 	}
-}
-
-func V2R(v Vector2d, w int32, h int32) *sdl.Rect {
-	return &sdl.Rect{int32(v.X), int32(v.Y), w, h}
-}
-
-func change_scene(new_scene *Scene, staring_pos *Vector2d) {
-	new_scene.build()
-	Interactive = []*Solid{}
-	new_scene.populate(200)
-	scene = new_scene
-
-	PC.Solid.Position = V2R(new_scene.StartPoint, TSzi*2, TSzi*2)
-	Cam.P = new_scene.CamPoint
-}
-
-func feetRect(pos *sdl.Rect) *sdl.Rect {
-	return &sdl.Rect{pos.X, pos.Y + 16, pos.W, pos.H - 16}
-}
-
-type SpawnPoint struct {
-	Position  *sdl.Rect
-	Frequency uint16
-	LvlMod    uint8
-}
-
-func (sp *SpawnPoint) Produce() {
-	px := float32(rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X)
-	py := float32(rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y)
-	mon := MonsterFactory(&OrcTPL, sp.LvlMod, Vector2d{px, py})
-
-	Monsters = append(Monsters, mon)
-}
-
-func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Char {
-
-	variance := uint8(math.Floor(float64(rand.Float32() * monsterTpl.LvlVariance * 100)))
-	lvl := uint8((monsterTpl.Lvl + lvlMod) + variance)
-	hp := monsterTpl.HP + float32(lvl*2)
-	sizeMod := int32(float32(lvl-monsterTpl.Lvl) * monsterTpl.ScalingFactor)
-	W := (monsterTpl.Size + sizeMod)
-	H := (monsterTpl.Size + sizeMod)
-
-	var DropItem *Item
-	var sumP float32
-	R := rand.Float32()
-	for _, l := range monsterTpl.Loot {
-		sumP += l.Perc
-		if R < sumP {
-			DropItem = l.Item
-			break
-		}
-	}
-
-	mon := Char{
-		Lvl: lvl,
-		Solid: &Solid{
-			Position:    &sdl.Rect{int32(pos.X), int32(pos.Y), W, H},
-			Velocity:    &Vector2d{0, 0},
-			Orientation: &Vector2d{0, 0},
-			Txt:         monsterTpl.Txtr,
-			Collision:   2,
-			Handlers: &InteractionHandlers{
-				OnCollDmg: 12,
-			},
-			CPattern: 0,
-			LoS:      monsterTpl.LoS,
-			MPattern: []Movement{
-				Movement{F_DOWN, 50},
-				Movement{F_UP, 90},
-				Movement{F_RIGHT, 10},
-				Movement{F_LEFT, 10},
-			},
-			Chase: PC.Solid,
-		},
-		ActionMap: monsterTpl.ActionMap,
-		Speed:     1,
-		BaseSpeed: 1,
-		CurrentHP: hp,
-		MaxHP:     hp,
-		Drop:      DropItem,
-	}
-	mon.Solid.SetAnimation(monsterTpl.ActionMap.DOWN, nil)
-	mon.Solid.CharPtr = &mon
-
-	return &mon
 }
