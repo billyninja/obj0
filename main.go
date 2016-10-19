@@ -28,7 +28,7 @@ const (
 	KEY_ARROW_LEFT              = 1073741904
 	KEY_ARROW_RIGHT             = 1073741903
 	KEY_LEFT_SHIT               = 1073742049
-	KEY_SPACE_BAR               = 1073741824 // 32
+	KEY_SPACE_BAR               = 32 // 1073741824
 	KEY_C                       = 99
 	KEY_X                       = 120
 	AI_TICK_LENGTH              = 2
@@ -93,10 +93,16 @@ var (
 	PUFF_S6 *sdl.Rect    = &sdl.Rect{64, 64, 64, 64}
 	PUFF_A  [8]*sdl.Rect = [8]*sdl.Rect{PUFF_S1, PUFF_S2, PUFF_S3, PUFF_S4, PUFF_S5, PUFF_S6}
 
+	BLANK  *sdl.Rect    = &sdl.Rect{2000, 200, 192, 192}
 	HIT_S1 *sdl.Rect    = &sdl.Rect{576, 0, 192, 192}
 	HIT_S2 *sdl.Rect    = &sdl.Rect{758, 0, 192, 192}
 	HIT_S3 *sdl.Rect    = &sdl.Rect{192, 192, 192, 192}
 	HIT_A  [8]*sdl.Rect = [8]*sdl.Rect{HIT_S1, HIT_S2, HIT_S3}
+
+	HIT_S4 *sdl.Rect    = &sdl.Rect{0, 0, 192, 192}
+	HIT_S5 *sdl.Rect    = &sdl.Rect{192, 0, 192, 192}
+	HIT_S6 *sdl.Rect    = &sdl.Rect{384, 0, 192, 192}
+	HIT_B  [8]*sdl.Rect = [8]*sdl.Rect{BLANK, BLANK, HIT_S4, HIT_S5, HIT_S6, HIT_S5, HIT_S4}
 
 	LAVA_S1 *sdl.Rect    = &sdl.Rect{192, 0, TSzi, TSzi}
 	LAVA_S2 *sdl.Rect    = &sdl.Rect{224, 0, TSzi, TSzi}
@@ -126,6 +132,7 @@ var (
 	OrcTPL MonsterTemplate = MonsterTemplate{}
 	puff   VFX             = VFX{}
 	hit    VFX             = VFX{}
+	impact VFX             = VFX{}
 
 	SCN_PLAINS *Scene = &Scene{
 		codename:   "plains",
@@ -273,6 +280,8 @@ type MonsterTemplate struct {
 	Size          int32
 	LvlVariance   float32
 	ScalingFactor float32
+	AtkCoolDown   float32
+	AtkSpeed      float32
 	LoS           int32
 	Loot          [8]Loot
 }
@@ -356,17 +365,20 @@ type Char struct {
 	ActionMap *ActionMap
 	Inventory []*ItemStack
 	//---
-	BaseSpeed float32
-	Speed     float32
-	Lvl       uint8
-	CurrentXP uint16
-	NextLvlXP uint16
-	CurrentHP float32
-	MaxHP     float32
-	CurrentST float32
-	MaxST     float32
-	Drop      *Item
-	Invinc    int64
+	BaseSpeed    float32
+	Speed        float32
+	Lvl          uint8
+	CurrentXP    uint16
+	NextLvlXP    uint16
+	CurrentHP    float32
+	MaxHP        float32
+	CurrentST    float32
+	MaxST        float32
+	Drop         *Item
+	Invinc       int64
+	AtkSpeed     float32
+	AtkCoolDownC float32
+	AtkCoolDown  float32
 }
 
 type TextEl struct {
@@ -551,15 +563,7 @@ func onColHdk(tgt *Solid, hdk *Solid) {
 	}
 	hdk.Handlers.OnCollDmg /= 2
 	if hdk.Handlers.OnCollDmg < 10 {
-		sol := &Solid{
-			Position:  &sdl.Rect{hdk.Position.X, hdk.Position.Y, TSzi, TSzi},
-			Txt:       glowTxt,
-			Anim:      &Animation{Action: YGLOW_A, PoseTick: 16},
-			Ttl:       time.Now().Add(100 * time.Millisecond).Unix(),
-			Collision: 0,
-		}
-
-		Interactive = append(Interactive, sol)
+		Visual = append(Visual, impact.Spawn(tgt.Position, nil))
 		hdk.Destroy()
 	}
 }
@@ -595,11 +599,9 @@ func PickUp(picker *Solid, item *Solid) {
 	if item.Handlers != nil && item.Handlers.OnPickUp != nil {
 		item.Handlers.OnPickUp(picker, item)
 	}
-
 	if picker.CharPtr != nil {
 		picker.SetAnimation(MAN_PU_ANIM, nil)
 	}
-
 	item.Destroy()
 }
 
@@ -638,6 +640,8 @@ func (ch *Char) MeleeAtk() {
 	for _, cObj := range CullMap {
 		if cObj.CharPtr != nil && checkCol(r, cObj.Position) {
 			cObj.CharPtr.depletHP(15)
+			r.W, r.H = 92, 92
+			Visual = append(Visual, impact.Spawn(r, ch.Solid.Orientation))
 		}
 	}
 	Visual = append(Visual, hit.Spawn(r, ch.Solid.Orientation))
@@ -731,12 +735,12 @@ func (s *Solid) SetAnimation(an *Animation, evt Event) {
 }
 
 func (s *Solid) PlayAnimation() {
+
 	s.Anim.PoseTick -= 1
 
-	if s.Anim.PoseTick == 0 {
+	if s.Anim.PoseTick <= 0 {
 		s.Anim.PoseTick = 12
 		if s.CharPtr != nil {
-
 			anim := s.CharPtr.CurrentFacing()
 			prvPose := s.Anim.Pose
 			s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
@@ -837,13 +841,19 @@ func (s *Solid) chase() {
 		s.Velocity.Y = 1
 	}
 
-	if int32(diffX) < CharSize && int32(diffY) < CharSize {
-		*s.Orientation = *s.Velocity
-		r := ActHitBox(s.Position, s.Orientation)
-		Visual = append(Visual, hit.Spawn(r, s.Orientation))
-		if checkCol(r, PC.Solid.Position) {
-			PC.depletHP(s.Handlers.OnCollDmg)
+	if int32(diffX) < CharSize && int32(diffY) < CharSize && s.CharPtr != nil {
+
+		if s.CharPtr.AtkCoolDownC <= 0 {
+			*s.Orientation = *s.Velocity
+			r := ActHitBox(s.Position, s.Orientation)
+			Visual = append(Visual, hit.Spawn(r, s.Orientation))
+			if checkCol(r, PC.Solid.Position) {
+				PC.depletHP(s.Handlers.OnCollDmg)
+				Visual = append(Visual, impact.Spawn(r, s.Orientation))
+			}
+			s.CharPtr.AtkCoolDownC += s.CharPtr.AtkCoolDown
 		}
+
 		return
 	} else {
 		s.procMovement(s.CharPtr.Speed)
@@ -893,8 +903,7 @@ func change_scene(new_scene *Scene, staring_pos *Vector2d) {
 }
 
 func (s *Scene) build() {
-	ni := int(s.CellsX) + 1
-	nj := int(s.CellsY) + 1
+	ni, nj := int(s.CellsX)+1, int(s.CellsY)+1
 
 	println("start build: ", s.codename)
 	rand.Seed(int64(time.Now().Nanosecond()))
@@ -926,11 +935,9 @@ func (s *Scene) populate(population int) {
 	}
 
 	for i := 0; i < population; i++ {
+		cX, cY := rand.Int31n(s.CellsX), rand.Int31n(s.CellsY)
 
-		cX := rand.Int31n(s.CellsX)
-		cY := rand.Int31n(s.CellsY)
-
-		absolute_pos := &sdl.Rect{cX * TSzi, cY * TSzi, TSzi, TSzi}
+		absolute_pos := &sdl.Rect{cX * TSzi, cY * TSzi, CharSize, CharSize}
 		sol := &Solid{}
 
 		switch rand.Int31n(9) {
@@ -962,8 +969,7 @@ func (s *Scene) populate(population int) {
 			Interactive = append(Interactive, sol)
 			break
 		case 3:
-			absolute_pos.H = 64
-			absolute_pos.W = 64
+			absolute_pos.H, absolute_pos.W = 64, 64
 			sol = &Solid{
 				Position:  absolute_pos,
 				Txt:       glowTxt,
@@ -981,9 +987,7 @@ func (s *Scene) populate(population int) {
 			Interactive = append(Interactive, sol)
 			break
 		case 4:
-
-			absolute_pos.H = 128
-			absolute_pos.W = 128
+			absolute_pos.W, absolute_pos.H = 128, 128
 
 			for _, sp2 := range Spawners {
 				if checkCol(absolute_pos, sp2.Position) {
@@ -1272,6 +1276,10 @@ func (s *Scene) update() {
 			continue
 		}
 
+		if cObj.CharPtr != nil && cObj.CharPtr.AtkCoolDownC > 0 {
+			cObj.CharPtr.AtkCoolDownC -= cObj.CharPtr.AtkSpeed
+		}
+
 		if cObj.Anim != nil {
 			cObj.PlayAnimation()
 		}
@@ -1301,9 +1309,11 @@ func (s *Scene) update() {
 		}
 
 		if AiTick == 0 {
+
 			if cObj.Anim != nil && cObj.Anim.PlayMode == 1 {
 				continue
 			}
+
 			if cObj.Chase != nil && cObj.LoSCheck() {
 				cObj.chase()
 			} else {
@@ -1462,12 +1472,14 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 			},
 			Chase: PC.Solid,
 		},
-		ActionMap: monsterTpl.ActionMap,
-		Speed:     1,
-		BaseSpeed: 1,
-		CurrentHP: hp,
-		MaxHP:     hp,
-		Drop:      DropItem,
+		ActionMap:   monsterTpl.ActionMap,
+		Speed:       1,
+		BaseSpeed:   1,
+		AtkSpeed:    monsterTpl.AtkSpeed,
+		AtkCoolDown: monsterTpl.AtkCoolDown,
+		CurrentHP:   hp,
+		MaxHP:       hp,
+		Drop:        DropItem,
 	}
 	mon.Solid.SetAnimation(monsterTpl.ActionMap.DOWN, nil)
 	mon.Solid.CharPtr = &mon
@@ -1531,9 +1543,7 @@ func (v *VFX) Spawn(Position *sdl.Rect, flip *Vector2d) *VFXInst {
 	}
 
 	if flip != nil {
-		println("f0")
 		i.Flip = *flip
-		println(i.Flip.X)
 	}
 
 	return i
@@ -1588,9 +1598,7 @@ func handleKeyUpEvent(key sdl.Keycode) {
 func catchEvents() bool {
 	var c bool
 
-	if PC.Solid.Anim.PlayMode == 1 {
-		PC.Solid.PlayAnimation()
-	}
+	PC.Solid.PlayAnimation()
 
 	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
@@ -1614,8 +1622,7 @@ func catchEvents() bool {
 		}
 	}
 
-	if c && PC.Solid.Anim.PlayMode == 0 {
-		PC.Solid.PlayAnimation()
+	if c { // && PC.Solid.Anim.PlayMode == 0
 		PC.Solid.procMovement(PC.Speed)
 	}
 
@@ -1723,10 +1730,13 @@ func main() {
 		Size:          64,
 		LvlVariance:   0.5,
 		ScalingFactor: 0.1,
+		AtkCoolDown:   60.0,
+		AtkSpeed:      1,
 	}
 
 	puff = VFX{Txtr: puffTxt, Strip: PUFF_A, DefaultSpeed: 4}
 	hit = VFX{Txtr: hitTxt, Strip: HIT_A, DefaultSpeed: 4}
+	impact = VFX{Txtr: hitTxt, Strip: HIT_B, DefaultSpeed: 2}
 
 	var running bool = true
 
@@ -1748,6 +1758,6 @@ func main() {
 
 		game_latency = (time.Since(then) / time.Microsecond)
 
-		sdl.Delay(24)
+		sdl.Delay(33 - uint32(game_latency/1000))
 	}
 }
