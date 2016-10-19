@@ -32,7 +32,7 @@ const (
 	KEY_C                       = 99
 	KEY_X                       = 120
 	AI_TICK_LENGTH              = 2
-	EVENT_TICK_LENGTH           = 3
+	EVENT_TICK_LENGTH           = 2
 )
 
 var (
@@ -47,6 +47,8 @@ var (
 	glowTxt         *sdl.Texture = nil
 	monstersTxt     *sdl.Texture = nil
 	transparencyTxt *sdl.Texture = nil
+	puffTxt         *sdl.Texture = nil
+	hitTxt          *sdl.Texture = nil
 
 	GRASS     *sdl.Rect = &sdl.Rect{0, 0, TSzi, TSzi}
 	DIRT                = &sdl.Rect{703, 0, TSzi, TSzi}
@@ -83,17 +85,28 @@ var (
 	MAN_AT_1      [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S4}
 	MAN_PICK_UP   [8]*sdl.Rect = [8]*sdl.Rect{MAN_PU_S1, MAN_PU_S2, MAN_PU_S3}
 
-	LAVA_S1 *sdl.Rect = &sdl.Rect{192, 0, TSzi, TSzi}
-	LAVA_S2 *sdl.Rect = &sdl.Rect{224, 0, TSzi, TSzi}
-	LAVA_S3 *sdl.Rect = &sdl.Rect{256, 0, TSzi, TSzi}
+	PUFF_S1 *sdl.Rect    = &sdl.Rect{0, 0, 64, 64}
+	PUFF_S2 *sdl.Rect    = &sdl.Rect{64, 0, 64, 64}
+	PUFF_S3 *sdl.Rect    = &sdl.Rect{128, 0, 64, 64}
+	PUFF_S4 *sdl.Rect    = &sdl.Rect{192, 0, 64, 64}
+	PUFF_S5 *sdl.Rect    = &sdl.Rect{0, 64, 64, 64}
+	PUFF_S6 *sdl.Rect    = &sdl.Rect{64, 64, 64, 64}
+	PUFF_A  [8]*sdl.Rect = [8]*sdl.Rect{PUFF_S1, PUFF_S2, PUFF_S3, PUFF_S4, PUFF_S5, PUFF_S6}
 
-	LAVA_A [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
+	HIT_S1 *sdl.Rect    = &sdl.Rect{576, 0, 192, 192}
+	HIT_S2 *sdl.Rect    = &sdl.Rect{758, 0, 192, 192}
+	HIT_S3 *sdl.Rect    = &sdl.Rect{192, 192, 192, 192}
+	HIT_A  [8]*sdl.Rect = [8]*sdl.Rect{HIT_S1, HIT_S2, HIT_S3}
 
-	YGLOW_S1 *sdl.Rect = &sdl.Rect{0, 0, TSzi * 2, TSzi * 2}
-	YGLOW_S2 *sdl.Rect = &sdl.Rect{32, 0, TSzi * 2, TSzi * 2}
-	YGLOW_S3 *sdl.Rect = &sdl.Rect{64, 0, TSzi * 2, TSzi * 2}
+	LAVA_S1 *sdl.Rect    = &sdl.Rect{192, 0, TSzi, TSzi}
+	LAVA_S2 *sdl.Rect    = &sdl.Rect{224, 0, TSzi, TSzi}
+	LAVA_S3 *sdl.Rect    = &sdl.Rect{256, 0, TSzi, TSzi}
+	LAVA_A  [8]*sdl.Rect = [8]*sdl.Rect{LAVA_S1, LAVA_S2, LAVA_S3, LAVA_S3, LAVA_S2}
 
-	YGLOW_A [8]*sdl.Rect = [8]*sdl.Rect{YGLOW_S1, YGLOW_S2, YGLOW_S3, YGLOW_S2}
+	YGLOW_S1 *sdl.Rect    = &sdl.Rect{0, 0, TSzi * 2, TSzi * 2}
+	YGLOW_S2 *sdl.Rect    = &sdl.Rect{32, 0, TSzi * 2, TSzi * 2}
+	YGLOW_S3 *sdl.Rect    = &sdl.Rect{64, 0, TSzi * 2, TSzi * 2}
+	YGLOW_A  [8]*sdl.Rect = [8]*sdl.Rect{YGLOW_S1, YGLOW_S2, YGLOW_S3, YGLOW_S2}
 
 	BGLOW_S1 *sdl.Rect = &sdl.Rect{224, 224, TSzi, TSzi}
 	BGLOW_S2 *sdl.Rect = &sdl.Rect{256, 224, TSzi, TSzi}
@@ -111,6 +124,8 @@ var (
 
 	BatTPL MonsterTemplate = MonsterTemplate{}
 	OrcTPL MonsterTemplate = MonsterTemplate{}
+	puff   VFX             = VFX{}
+	hit    VFX             = VFX{}
 
 	SCN_PLAINS *Scene = &Scene{
 		codename:   "plains",
@@ -133,7 +148,7 @@ var (
 
 	SCENES []*Scene = []*Scene{SCN_PLAINS, SCN_CAVE}
 
-	Cam = Camera{Vector2d{0, 0}, 512, 256}
+	Cam = Camera{Vector2d{0, 0}, 320, 256}
 
 	PC = Char{
 		Solid: &Solid{
@@ -185,6 +200,7 @@ var (
 	scene       *Scene
 	World       [][]*sdl.Rect
 	Interactive []*Solid
+	Visual      []*VFXInst
 	Spawners    []*SpawnPoint
 	Monsters    []*Char
 	GUI         []*sdl.Rect
@@ -491,7 +507,6 @@ func (db *DBox) Present(renderer *sdl.Renderer) {
 }
 
 func (t *TextEl) Bake(renderer *sdl.Renderer) (*sdl.Texture, int32, int32) {
-
 	surface, _ := t.Font.RenderUTF8_Blended_Wrapped(t.Content, t.Color, int(winWidth))
 	defer surface.Free()
 	txtr, _ := renderer.CreateTextureFromSurface(surface)
@@ -613,7 +628,7 @@ func BashDoor(actor *Solid, door *Solid) {
 }
 
 func (ch *Char) MeleeAtk() {
-	var stCost float32 = 2
+	var stCost float32 = 5
 	if stCost > ch.CurrentST {
 		return
 	}
@@ -623,9 +638,9 @@ func (ch *Char) MeleeAtk() {
 	for _, cObj := range CullMap {
 		if cObj.CharPtr != nil && checkCol(r, cObj.Position) {
 			cObj.CharPtr.depletHP(15)
-			cObj.CharPtr.PushBack(5, ch.Solid.Orientation)
 		}
 	}
+	Visual = append(Visual, hit.Spawn(r, ch.Solid.Orientation))
 }
 
 func (ch *Char) CastSpell() {
@@ -822,12 +837,14 @@ func (s *Solid) chase() {
 		s.Velocity.Y = 1
 	}
 
-	if diffX < 36 && diffY < 36 {
+	if int32(diffX) < CharSize && int32(diffY) < CharSize {
 		*s.Orientation = *s.Velocity
 		r := ActHitBox(s.Position, s.Orientation)
+		Visual = append(Visual, hit.Spawn(r, s.Orientation))
 		if checkCol(r, PC.Solid.Position) {
 			PC.depletHP(s.Handlers.OnCollDmg)
 		}
+		return
 	} else {
 		s.procMovement(s.CharPtr.Speed)
 	}
@@ -1163,6 +1180,22 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	}
 }
 
+func (s *Scene) _VFXRender(renderer *sdl.Renderer) {
+	for _, vi := range Visual {
+		if vi.Pos == nil {
+			continue
+		}
+		scrp := worldToScreen(vi.Pos, Cam)
+		if inScreen(scrp) {
+			if vi.Flip.X == -1 {
+				renderer.CopyEx(vi.Vfx.Txtr, vi.CurrentFrame(), scrp, 0, nil, sdl.FLIP_HORIZONTAL)
+			} else {
+				renderer.Copy(vi.Vfx.Txtr, vi.CurrentFrame(), scrp)
+			}
+		}
+	}
+}
+
 func (s *Scene) render(renderer *sdl.Renderer) {
 	renderer.Clear()
 	scrPos := worldToScreen(PC.Solid.Position, Cam)
@@ -1176,6 +1209,7 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 		scrPos.Y += 12
 		renderer.Copy(spritesheetTxt, SHADOW, scrPos)
 	}
+	s._VFXRender(renderer)
 	s._GUIRender(renderer)
 
 	// FLUSH FRAME
@@ -1223,11 +1257,10 @@ func (s *Scene) update() {
 
 		// Kill logic
 		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
-
 			if cObj.CharPtr.Drop != nil {
 				PlaceDrop(cObj.CharPtr.Drop, cObj.Position)
 			}
-
+			Visual = append(Visual, puff.Spawn(&sdl.Rect{cObj.Position.X, cObj.Position.Y, 92, 92}, nil))
 			cObj.Destroy()
 
 			PC.CurrentXP += uint16(cObj.CharPtr.MaxHP / 10)
@@ -1244,7 +1277,6 @@ func (s *Scene) update() {
 		}
 
 		hnd := cObj.Handlers
-
 		if hnd != nil && EventTick == 0 {
 			fr := feetRect(PC.Solid.Position)
 			if checkCol(fr, cObj.Position) {
@@ -1297,6 +1329,12 @@ func (s *Scene) update() {
 
 	if AiTick == 0 {
 		AiTick = AI_TICK_LENGTH
+	}
+
+	for _, vi := range Visual {
+		if vi.Vfx != nil {
+			vi.UpdateAnim()
+		}
 	}
 } // end update()
 
@@ -1434,7 +1472,71 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 	mon.Solid.SetAnimation(monsterTpl.ActionMap.DOWN, nil)
 	mon.Solid.CharPtr = &mon
 
+	Visual = append(Visual, puff.Spawn(&sdl.Rect{int32(pos.X), int32(pos.Y), 92, 92}, nil))
+
 	return &mon
+}
+
+type VFX struct {
+	Txtr         *sdl.Texture
+	Strip        [8]*sdl.Rect
+	DefaultSpeed uint8
+}
+
+type VFXInst struct {
+	Vfx      *VFX
+	Pos      *sdl.Rect
+	Pose     uint8
+	Tick     uint8
+	Ttl      int64
+	CurrTick uint8
+	Loop     uint8
+	Flip     Vector2d
+}
+
+func (vi *VFXInst) UpdateAnim() {
+	vi.CurrTick -= 1
+	if vi.CurrTick == 0 {
+		vi.Pose += 1
+		if vi.Vfx.Strip[vi.Pose] == nil {
+			if vi.Loop <= 0 {
+				vi.Destroy()
+				return
+			} else {
+				vi.Pose = 0
+			}
+		}
+		vi.CurrTick = vi.Tick
+	}
+}
+
+func (vi *VFXInst) Destroy() {
+	vi.Vfx = nil
+	vi.Pos = nil
+}
+
+func (vi *VFXInst) CurrentFrame() *sdl.Rect {
+	return vi.Vfx.Strip[vi.Pose]
+}
+
+func (v *VFX) Spawn(Position *sdl.Rect, flip *Vector2d) *VFXInst {
+	var ttl int64
+
+	i := &VFXInst{
+		Vfx:      v,
+		Pos:      Position,
+		Ttl:      ttl,
+		Tick:     v.DefaultSpeed,
+		CurrTick: v.DefaultSpeed,
+	}
+
+	if flip != nil {
+		println("f0")
+		i.Flip = *flip
+		println(i.Flip.X)
+	}
+
+	return i
 }
 
 func handleKeyEvent(key sdl.Keycode) Vector2d {
@@ -1558,12 +1660,16 @@ func main() {
 	glowImg, _ := img.Load("assets/textures/glowing_ts.png")
 	monstersImg, _ := img.Load("assets/textures/monsters.png")
 	transparencyImg, _ := img.Load("assets/textures/transparency.png")
+	puffImg, _ := img.Load("assets/textures/puff.png")
+	hitImg, _ := img.Load("assets/textures/hit.png")
 	defer monstersImg.Free()
 	defer tilesetImg.Free()
 	defer spritesheetImg.Free()
 	defer powerupsImg.Free()
 	defer glowImg.Free()
 	defer transparencyImg.Free()
+	defer puffImg.Free()
+	defer hitImg.Free()
 
 	tilesetTxt, _ = renderer.CreateTextureFromSurface(tilesetImg)
 	spritesheetTxt, _ = renderer.CreateTextureFromSurface(spritesheetImg)
@@ -1571,12 +1677,16 @@ func main() {
 	glowTxt, _ = renderer.CreateTextureFromSurface(glowImg)
 	monstersTxt, _ = renderer.CreateTextureFromSurface(monstersImg)
 	transparencyTxt, _ = renderer.CreateTextureFromSurface(transparencyImg)
+	puffTxt, _ = renderer.CreateTextureFromSurface(puffImg)
+	hitTxt, _ = renderer.CreateTextureFromSurface(hitImg)
 	defer tilesetTxt.Destroy()
 	defer spritesheetTxt.Destroy()
 	defer powerupsTxt.Destroy()
 	defer glowTxt.Destroy()
 	defer monstersTxt.Destroy()
 	defer transparencyTxt.Destroy()
+	defer puffTxt.Destroy()
+	defer hitTxt.Destroy()
 
 	GreenBlob.Txtr = powerupsTxt
 	CrystalizedJelly.Txtr = powerupsTxt
@@ -1614,6 +1724,9 @@ func main() {
 		LvlVariance:   0.5,
 		ScalingFactor: 0.1,
 	}
+
+	puff = VFX{Txtr: puffTxt, Strip: PUFF_A, DefaultSpeed: 4}
+	hit = VFX{Txtr: hitTxt, Strip: HIT_A, DefaultSpeed: 4}
 
 	var running bool = true
 
