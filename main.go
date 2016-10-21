@@ -29,7 +29,7 @@ const (
 	KEY_ARROW_LEFT  = 1073741904
 	KEY_ARROW_RIGHT = 1073741903
 	KEY_LEFT_SHIFT  = 1073742049
-	KEY_SPACE_BAR   = 1073741824 // 32
+	KEY_SPACE_BAR   = 32 // 1073741824
 	KEY_C           = 99
 	KEY_X           = 120
 	KEY_Z           = 80 // todo
@@ -269,6 +269,7 @@ func (cs *ControlState) Update(keydown []sdl.Keycode, keyup []sdl.Keycode) {
 			break
 		case KEY_LEFT_SHIFT:
 			cs.ACTION_MOD1 += 1
+			PC.Solid.Speed = (PC.Solid.Speed + PC.SpeedMod) * 1.6
 			break
 		}
 	}
@@ -277,6 +278,7 @@ func (cs *ControlState) Update(keydown []sdl.Keycode, keyup []sdl.Keycode) {
 		case KEY_ARROW_UP:
 			cs.DPAD.Y = 0
 			PC.Solid.Orientation.Y = 0
+			PC.Solid.Speed = PC.Solid.Speed + PC.SpeedMod
 			break
 		case KEY_ARROW_DOWN:
 			cs.DPAD.Y = 0
@@ -838,19 +840,35 @@ func (ch *Char) CurrentFacing() *Animation {
 	}
 
 	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 1 {
-		return ch.ActionMap.DR
+		if ch.ActionMap.DR != nil {
+			return ch.ActionMap.DR
+		} else {
+			return ch.ActionMap.RIGHT
+		}
 	}
 
 	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == -1 {
-		return ch.ActionMap.UR
+		if ch.ActionMap.UR != nil {
+			return ch.ActionMap.UR
+		} else {
+			return ch.ActionMap.RIGHT
+		}
 	}
 
 	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 1 {
-		return ch.ActionMap.DL
+		if ch.ActionMap.DL != nil {
+			return ch.ActionMap.DL
+		} else {
+			return ch.ActionMap.LEFT
+		}
 	}
 
 	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == -1 {
-		return ch.ActionMap.UL
+		if ch.ActionMap.UL != nil {
+			return ch.ActionMap.UL
+		} else {
+			return ch.ActionMap.LEFT
+		}
 	}
 
 	return ch.ActionMap.DOWN
