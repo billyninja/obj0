@@ -23,23 +23,28 @@ const (
 	CenterY                     = winHeight / 2
 	WORLD_CELLS_X               = 500
 	WORLD_CELLS_Y               = 200
-	KEY_ARROW_UP                = 1073741906
-	KEY_ARROW_DOWN              = 1073741905
-	KEY_ARROW_LEFT              = 1073741904
-	KEY_ARROW_RIGHT             = 1073741903
-	KEY_LEFT_SHIT               = 1073742049
-	KEY_SPACE_BAR               = 32 // 1073741824
-	KEY_C                       = 99
-	KEY_X                       = 120
-	AI_TICK_LENGTH              = 2
-	EVENT_TICK_LENGTH           = 2
+
+	KEY_ARROW_UP    = 1073741906
+	KEY_ARROW_DOWN  = 1073741905
+	KEY_ARROW_LEFT  = 1073741904
+	KEY_ARROW_RIGHT = 1073741903
+	KEY_LEFT_SHIFT  = 1073742049
+	KEY_SPACE_BAR   = 32 //1073741824 //
+	KEY_C           = 99
+	KEY_X           = 120
+	KEY_Z           = 80 // todo
+
+	AI_TICK_LENGTH    = 2
+	EVENT_TICK_LENGTH = 2
 )
 
 var (
 	event        sdl.Event
 	font         *ttf.Font
 	game_latency time.Duration
+	Controls     *ControlState = &ControlState{}
 
+	CL_WHITE        sdl.Color    = sdl.Color{255, 255, 255, 255}
 	tilesetTxt      *sdl.Texture = nil
 	spritesheetTxt  *sdl.Texture = nil
 	particlesTxt    *sdl.Texture = nil
@@ -81,7 +86,7 @@ var (
 	MAN_CS_S3     *sdl.Rect    = &sdl.Rect{256, 224, TSzi, TSzi}
 	MAN_CS_S4     *sdl.Rect    = &sdl.Rect{224, 192, TSzi, TSzi}
 	MAN_PUSH_BACK [8]*sdl.Rect = [8]*sdl.Rect{MAN_PB_S1, MAN_PB_S2}
-	MAN_CAST      [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S1, MAN_CS_S2, MAN_CS_S3, MAN_CS_S4}
+	MAN_CAST      [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S1, MAN_CS_S3, MAN_CS_S4}
 	MAN_AT_1      [8]*sdl.Rect = [8]*sdl.Rect{MAN_CS_S4}
 	MAN_PICK_UP   [8]*sdl.Rect = [8]*sdl.Rect{MAN_PU_S1, MAN_PU_S2, MAN_PU_S3}
 
@@ -166,8 +171,8 @@ var (
 		Lvl:       1,
 		CurrentXP: 0,
 		NextLvlXP: 100,
-		BaseSpeed: 3,
-		Speed:     3,
+		SpeedMod:  1,
+		BaseSpeed: 2,
 		CurrentHP: 220,
 		MaxHP:     250,
 		CurrentST: 250,
@@ -220,6 +225,166 @@ var (
 type Vector2d struct {
 	X float32
 	Y float32
+}
+
+type ControlState struct {
+	DPAD        Vector2d
+	ACTION_A    int32
+	ACTION_B    int32
+	ACTION_C    int32
+	ACTION_MAIN int32
+	ACTION_MOD1 int32
+}
+
+func (cs *ControlState) Update(keydown []sdl.Keycode, keyup []sdl.Keycode) {
+	for _, key := range keyup {
+		println("KUP", key)
+		switch key {
+		case KEY_ARROW_UP:
+			{
+				cs.DPAD.Y = 0
+			}
+			break
+		case KEY_ARROW_DOWN:
+			{
+				cs.DPAD.Y = 0
+			}
+			break
+		case KEY_ARROW_LEFT:
+			{
+				cs.DPAD.X = 0
+			}
+			break
+		case KEY_ARROW_RIGHT:
+			{
+				cs.DPAD.X = 0
+			}
+			break
+		case KEY_Z:
+			{
+				cs.ACTION_A = 0
+			}
+			break
+		case KEY_X:
+			{
+				cs.ACTION_B = 0
+			}
+			break
+		case KEY_C:
+			{
+				cs.ACTION_C = 0
+			}
+			break
+		case KEY_SPACE_BAR:
+			{
+				cs.ACTION_MAIN = 0
+			}
+			break
+		case KEY_LEFT_SHIFT:
+			{
+				cs.ACTION_MOD1 = 0
+			}
+			break
+		}
+	}
+	for _, key := range keydown {
+		switch key {
+		case KEY_ARROW_UP:
+			{
+				cs.DPAD.Y = -1
+			}
+			break
+		case KEY_ARROW_DOWN:
+			{
+				cs.DPAD.Y = 1
+			}
+			break
+		case KEY_ARROW_LEFT:
+			{
+				cs.DPAD.X = -1
+			}
+			break
+		case KEY_ARROW_RIGHT:
+			{
+				cs.DPAD.X = 1
+			}
+			break
+		case KEY_Z:
+			{
+				cs.ACTION_A += 1
+			}
+			break
+		case KEY_X:
+			{
+				cs.ACTION_B += 1
+			}
+			break
+		case KEY_C:
+			{
+				cs.ACTION_C += 1
+			}
+			break
+		case KEY_SPACE_BAR:
+			{
+				cs.ACTION_MAIN += 1
+			}
+			break
+		case KEY_LEFT_SHIFT:
+			{
+				cs.ACTION_MOD1 += 1
+			}
+			break
+		}
+	}
+}
+
+func ThrotleValue(v float32, limitAbs float64) float32 {
+	v64 := float64(v)
+	abs := math.Abs(v64)
+	sign := math.Copysign(1, v64)
+	if abs > limitAbs {
+		return float32(limitAbs * sign)
+	}
+	return v
+}
+
+func (s *Solid) UpdateVelocity(cs *ControlState) {
+
+	/*
+		v(-3, -3) -> c(-1, -1) | v(-3, -3)
+		v(-3, -3) -> c(0, -1) | v(-2, -3)
+		v(-2, -3) -> c(0, -1) | v(-1, -3)
+		v(-1, -3) -> c(0, -1) | v(0, -3)
+		v(0, -3) -> c(0, -1) | v(0, -3)
+	*/
+
+	if cs.DPAD.X != 0 || s.Velocity.X != 0 {
+		if cs.DPAD.X != 0 {
+			s.Velocity.X += cs.DPAD.X
+			s.Velocity.X = ThrotleValue(s.Velocity.X, 3)
+		} else {
+			s.Velocity.X = float32(math.Abs(float64(s.Velocity.X))-1) * s.Orientation.X
+		}
+	}
+
+	if cs.DPAD.Y != 0 || s.Velocity.Y != 0 {
+		if cs.DPAD.Y != 0 {
+			s.Velocity.Y += cs.DPAD.Y
+			s.Velocity.Y = ThrotleValue(s.Velocity.Y, 3)
+		} else {
+			s.Velocity.Y = float32(math.Abs(float64(s.Velocity.Y))-1) * s.Orientation.Y
+		}
+	}
+
+	println("VEL", s.Velocity.X, s.Velocity.Y)
+}
+
+func (s *Solid) update_orientation() {
+	cpX := math.Copysign(1, float64(s.Velocity.X))
+	cpY := math.Copysign(1, float64(s.Velocity.Y))
+
+	s.Orientation.X = float32(cpX)
+	s.Orientation.Y = float32(cpY)
 }
 
 type Camera struct {
@@ -337,6 +502,7 @@ type Solid struct {
 	Txt         *sdl.Texture
 	Ttl         int64
 	Collision   uint8
+	Speed       float32
 
 	// AI RELATED
 	CPattern uint32
@@ -365,8 +531,8 @@ type Char struct {
 	ActionMap *ActionMap
 	Inventory []*ItemStack
 	//---
+	SpeedMod     float32
 	BaseSpeed    float32
-	Speed        float32
 	Lvl          uint8
 	CurrentXP    uint16
 	NextLvlXP    uint16
@@ -394,6 +560,24 @@ type DBox struct {
 	Text     []*TextEl
 	BGColor  sdl.Color
 	Char     *Char
+}
+
+type VFX struct {
+	Txtr         *sdl.Texture
+	Strip        [8]*sdl.Rect
+	DefaultSpeed uint8
+}
+
+type VFXInst struct {
+	Vfx      *VFX
+	Pos      *sdl.Rect
+	Pose     uint8
+	Tick     uint8
+	Ttl      int64
+	CurrTick uint8
+	Loop     uint8
+	Flip     Vector2d
+	Text     *TextEl
 }
 
 func (ss *SpriteSheet) BuildBasicActions(actLength uint8, hasDiagonals bool) *ActionMap {
@@ -438,6 +622,11 @@ func (ss *SpriteSheet) BuildBasicActions(actLength uint8, hasDiagonals bool) *Ac
 	} // end for
 	return AM
 }
+
+// func PopText(position *sdl.Rect, content string, color sdl.Color) {
+// 	tEl := TextEl{font, content, CL_WHITE}
+// 	GUI = append(GUI)
+// }
 
 func (ss *SpriteSheet) GetPose(o Vector2d, p uint8) *sdl.Rect {
 
@@ -498,7 +687,7 @@ func (db *DBox) LoadText(content []string) {
 		db.Text[i] = &TextEl{
 			Font:    font,
 			Content: s,
-			Color:   sdl.Color{255, 255, 255, 255},
+			Color:   CL_WHITE,
 		}
 	}
 }
@@ -542,6 +731,22 @@ func checkCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 		r1.Y+r1.H > r2.Y)
 }
 
+func (ch *Char) ApplyInvinc() {
+	if PC.Invinc == 0 {
+		PC.Invinc = time.Now().Add(400 * time.Millisecond).Unix()
+	}
+}
+
+func ResolveCol(ObjA *Solid, ObjB *Solid) {
+	if ObjB.Handlers != nil && ObjB.Handlers.OnCollEvent != nil {
+		ObjB.Handlers.OnCollEvent(ObjA, ObjB)
+	}
+	if ObjB.Collision == 1 {
+		ObjA.Speed = 0
+		ObjA.Velocity = &Vector2d{0, 0}
+	}
+}
+
 func actProc() {
 	action_hit_box := ActHitBox(PC.Solid.Position, PC.Solid.Orientation)
 
@@ -561,11 +766,8 @@ func onColHdk(tgt *Solid, hdk *Solid) {
 	if tgt.CharPtr != nil {
 		tgt.CharPtr.depletHP(hdk.Handlers.OnCollDmg)
 	}
-	hdk.Handlers.OnCollDmg /= 2
-	if hdk.Handlers.OnCollDmg < 10 {
-		Visual = append(Visual, impact.Spawn(tgt.Position, nil))
-		hdk.Destroy()
-	}
+	Visual = append(Visual, impact.Spawn(tgt.Position, nil))
+	hdk.Destroy()
 }
 
 func ReleaseSpell(caster *Solid, tgt *Solid) {
@@ -591,6 +793,7 @@ func ReleaseSpell(caster *Solid, tgt *Solid) {
 			Movement{*caster.Orientation, 255},
 		},
 		Collision: 1,
+		Speed:     6,
 	}
 	Interactive = append(Interactive, h)
 }
@@ -648,7 +851,6 @@ func (ch *Char) MeleeAtk() {
 }
 
 func (ch *Char) CastSpell() {
-
 	var stCost float32 = 20
 	if stCost > ch.CurrentST {
 		return
@@ -703,6 +905,15 @@ func (ch *Char) depletHP(dmg float32) {
 	} else {
 		ch.CurrentHP -= dmg
 	}
+
+	PopText(ch.Solid.Position, fmt.Sprintf("%.0f", dmg), CL_WHITE)
+}
+
+func PopText(pos *sdl.Rect, content string, color sdl.Color) {
+	tEl := &TextEl{Font: font, Content: content, Color: color}
+	tPos := &sdl.Rect{pos.X, pos.Y - 30, 20, 20}
+	vfi := &VFXInst{Text: tEl, Pos: tPos, Ttl: time.Now().Add(400 * time.Millisecond).Unix()}
+	Visual = append(Visual, vfi)
 }
 
 func (ch *Char) PushBack(d int32, o *Vector2d) {
@@ -756,7 +967,9 @@ func (s *Solid) PlayAnimation() {
 	}
 }
 
-func (s *Solid) procMovement(speed float32) {
+func (s *Solid) procMovement() {
+	speed := s.Speed
+	speed = 10
 	if s.Velocity.X != 0 && s.Velocity.Y != 0 {
 		speed -= 0.5
 		if speed < 1 {
@@ -776,20 +989,6 @@ func (s *Solid) procMovement(speed float32) {
 
 	if (np.X == s.Position.X && np.Y == s.Position.Y) || outbound {
 		return
-	}
-	for _, obj := range CullMap {
-		if obj == s || obj.Position == nil {
-			continue
-		}
-		fr := feetRect(np)
-		if checkCol(fr, obj.Position) {
-			if obj.Handlers != nil && obj.Handlers.OnCollEvent != nil {
-				obj.Handlers.OnCollEvent(s, obj)
-			}
-			if obj.Collision == 1 {
-				return
-			}
-		}
 	}
 
 	if s.CharPtr != nil {
@@ -841,7 +1040,7 @@ func (s *Solid) chase() {
 		s.Velocity.Y = 1
 	}
 
-	if int32(diffX) < CharSize && int32(diffY) < CharSize && s.CharPtr != nil {
+	if int32(diffX) < CharSize+10 && int32(diffY) < CharSize+10 && s.CharPtr != nil {
 
 		if s.CharPtr.AtkCoolDownC <= 0 {
 			*s.Orientation = *s.Velocity
@@ -850,13 +1049,14 @@ func (s *Solid) chase() {
 			if checkCol(r, PC.Solid.Position) {
 				PC.depletHP(s.Handlers.OnCollDmg)
 				Visual = append(Visual, impact.Spawn(r, s.Orientation))
+				PC.ApplyInvinc()
 			}
 			s.CharPtr.AtkCoolDownC += s.CharPtr.AtkCoolDown
 		}
 
 		return
 	} else {
-		s.procMovement(s.CharPtr.Speed)
+		s.procMovement()
 	}
 
 	return
@@ -879,7 +1079,7 @@ func (s *Solid) peformPattern(sp float32) {
 	if mov != nil && s.Position != nil {
 		s.Orientation = &mov.Orientation
 		s.Velocity = &mov.Orientation
-		s.procMovement(sp)
+		s.procMovement()
 		s.CPattern += uint32(sp)
 	}
 }
@@ -900,6 +1100,7 @@ func change_scene(new_scene *Scene, staring_pos *Vector2d) {
 	scene = new_scene
 
 	PC.Solid.Position = V2R(new_scene.StartPoint, CharSize, CharSize)
+	PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
 }
 
 func (s *Scene) build() {
@@ -1008,6 +1209,7 @@ func (s *Scene) populate(population int) {
 					Position:    absolute_pos,
 					Velocity:    &Vector2d{0, 0},
 					Orientation: &Vector2d{0, 1},
+					Speed:       2,
 					Txt:         spritesheetTxt,
 					Collision:   1,
 					Handlers: &InteractionHandlers{
@@ -1023,7 +1225,6 @@ func (s *Scene) populate(population int) {
 					},
 				},
 				ActionMap: PC.ActionMap,
-				Speed:     1,
 				CurrentHP: 9999,
 				MaxHP:     9999,
 			}
@@ -1150,7 +1351,7 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 		counter := TextEl{
 			Content: fmt.Sprintf("%d", stack.Qty),
 			Font:    font,
-			Color:   sdl.Color{255, 255, 255, 255},
+			Color:   CL_WHITE,
 		}
 
 		counterTxtr, cW, cH := counter.Bake(renderer)
@@ -1172,7 +1373,7 @@ func (s *Scene) _GUIRender(renderer *sdl.Renderer) {
 	lvl_TextEl := TextEl{
 		Font:    font,
 		Content: fmt.Sprintf("Lvl. %d", PC.Lvl),
-		Color:   sdl.Color{255, 255, 255, 255},
+		Color:   CL_WHITE,
 	}
 	lvl_txtr, W, H := lvl_TextEl.Bake(renderer)
 	renderer.Copy(lvl_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{128, 60, W, H})
@@ -1191,10 +1392,15 @@ func (s *Scene) _VFXRender(renderer *sdl.Renderer) {
 		}
 		scrp := worldToScreen(vi.Pos, Cam)
 		if inScreen(scrp) {
-			if vi.Flip.X == -1 {
-				renderer.CopyEx(vi.Vfx.Txtr, vi.CurrentFrame(), scrp, 0, nil, sdl.FLIP_HORIZONTAL)
+			if vi.Text != nil {
+				txtr, w, h := vi.Text.Bake(renderer)
+				renderer.Copy(txtr, &sdl.Rect{0, 0, w, h}, scrp)
 			} else {
-				renderer.Copy(vi.Vfx.Txtr, vi.CurrentFrame(), scrp)
+				if vi.Flip.X == -1 {
+					renderer.CopyEx(vi.Vfx.Txtr, vi.CurrentFrame(), scrp, 0, nil, sdl.FLIP_HORIZONTAL)
+				} else {
+					renderer.Copy(vi.Vfx.Txtr, vi.CurrentFrame(), scrp)
+				}
 			}
 		}
 	}
@@ -1252,22 +1458,34 @@ func (s *Scene) update() {
 		Cam.P.Y += float32((newScreenPos.Y + TSzi) - (winHeight - Cam.DZy))
 	}
 
-	for _, cObj := range CullMap {
+	for _, obj := range CullMap {
+		if obj.Position == nil {
+			continue
+		}
+		fr := feetRect(PC.Solid.Position)
+		if checkCol(fr, obj.Position) {
+			ResolveCol(PC.Solid, obj)
+		}
+	}
+
+	for _, i := range CullMap {
+		if i.Position == nil {
+			continue
+		}
 		// Ttl kill
-		if cObj.Ttl > 0 && cObj.Ttl < now {
-			cObj.Destroy()
+		if i.Ttl > 0 && i.Ttl < now {
+			i.Destroy()
 			continue
 		}
 
-		// Kill logic
-		if cObj.CharPtr != nil && cObj.CharPtr.CurrentHP <= 0 {
-			if cObj.CharPtr.Drop != nil {
-				PlaceDrop(cObj.CharPtr.Drop, cObj.Position)
+		if i.CharPtr != nil && i.CharPtr.CurrentHP <= 0 {
+			if i.CharPtr.Drop != nil {
+				PlaceDrop(i.CharPtr.Drop, i.Position)
 			}
-			Visual = append(Visual, puff.Spawn(&sdl.Rect{cObj.Position.X, cObj.Position.Y, 92, 92}, nil))
-			cObj.Destroy()
+			Visual = append(Visual, puff.Spawn(&sdl.Rect{i.Position.X, i.Position.Y, 92, 92}, nil))
+			i.Destroy()
 
-			PC.CurrentXP += uint16(cObj.CharPtr.MaxHP / 10)
+			PC.CurrentXP += uint16(i.CharPtr.MaxHP / 10)
 			if PC.CurrentXP >= PC.NextLvlXP {
 				PC.CurrentXP = 0
 				PC.Lvl++
@@ -1276,48 +1494,39 @@ func (s *Scene) update() {
 			continue
 		}
 
-		if cObj.CharPtr != nil && cObj.CharPtr.AtkCoolDownC > 0 {
-			cObj.CharPtr.AtkCoolDownC -= cObj.CharPtr.AtkSpeed
+		fr := feetRect(PC.Solid.Position)
+		if checkCol(fr, i.Position) {
+			ResolveCol(PC.Solid, i)
 		}
 
-		if cObj.Anim != nil {
-			cObj.PlayAnimation()
-		}
-
-		hnd := cObj.Handlers
-		if hnd != nil && EventTick == 0 {
-			fr := feetRect(PC.Solid.Position)
-			if checkCol(fr, cObj.Position) {
-
-				if hnd.OnCollEvent != nil {
-					hnd.OnCollEvent(PC.Solid, cObj)
-				}
-
-				if hnd.OnCollDmg != 0 {
-					PC.depletHP(hnd.OnCollDmg)
-					if cObj.Orientation == nil {
-						cObj.Orientation = &Vector2d{PC.Solid.Orientation.X * -1, PC.Solid.Orientation.Y * -1}
-					}
-					PC.Invinc = time.Now().Add(2 * time.Second).Unix()
-				}
-
-				if hnd.OnCollPushBack != 0 {
-					PC.PushBack(hnd.OnCollPushBack, cObj.Orientation)
-				}
-
-			}
+		if i.Anim != nil {
+			i.PlayAnimation()
 		}
 
 		if AiTick == 0 {
 
-			if cObj.Anim != nil && cObj.Anim.PlayMode == 1 {
+			if i.Anim != nil && i.Anim.PlayMode == 1 {
 				continue
 			}
 
-			if cObj.Chase != nil && cObj.LoSCheck() {
-				cObj.chase()
+			if i.Chase != nil && i.LoSCheck() {
+				i.chase()
 			} else {
-				cObj.peformPattern(1)
+				var sp float32 = 2
+				if i.CharPtr != nil {
+					sp = i.Speed
+				}
+				i.peformPattern(sp)
+			}
+		}
+
+		for _, j := range CullMap {
+			if j == i || j.Position == nil {
+				continue
+			}
+			fr := feetRect(i.Position)
+			if checkCol(fr, j.Position) {
+				ResolveCol(i, j)
 			}
 		}
 	}
@@ -1342,22 +1551,24 @@ func (s *Scene) update() {
 	}
 
 	for _, vi := range Visual {
-		if vi.Vfx != nil {
-			vi.UpdateAnim()
+		if vi.Ttl > 0 && vi.Ttl < now {
+			vi.Destroy()
+			continue
 		}
+		vi.UpdateAnim()
 	}
 } // end update()
 
 func debug_info(renderer *sdl.Renderer) {
-	dbg_content := fmt.Sprintf("px %d py %d|vx %.1f vy %.1f (%.1f, %.1f) An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
-		PC.Solid.Position.X, PC.Solid.Position.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Orientation.X,
+	dbg_content := fmt.Sprintf("px %d py %d|Cx %.1f Cy %.1f | vx %.1f vy %.1f (%.1f, %.1f) An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
+		PC.Solid.Position.X, PC.Solid.Position.Y, Controls.DPAD.X, Controls.DPAD.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Orientation.X,
 		PC.Solid.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
 		len(Interactive), Cam.P.X, Cam.P.Y, game_latency, EventTick, AiTick)
 
 	dbg_TextEl := TextEl{
 		Font:    font,
 		Content: dbg_content,
-		Color:   sdl.Color{255, 255, 255, 255},
+		Color:   CL_WHITE,
 	}
 	dbg_txtr, W, H := dbg_TextEl.Bake(renderer)
 	renderer.Copy(dbg_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{0, winHeight - H, W, H})
@@ -1458,6 +1669,7 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 			Velocity:    &Vector2d{0, 0},
 			Orientation: &Vector2d{0, 0},
 			Txt:         monsterTpl.Txtr,
+			Speed:       1,
 			Collision:   2,
 			Handlers: &InteractionHandlers{
 				OnCollDmg: 12,
@@ -1473,8 +1685,6 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 			Chase: PC.Solid,
 		},
 		ActionMap:   monsterTpl.ActionMap,
-		Speed:       1,
-		BaseSpeed:   1,
 		AtkSpeed:    monsterTpl.AtkSpeed,
 		AtkCoolDown: monsterTpl.AtkCoolDown,
 		CurrentHP:   hp,
@@ -1489,24 +1699,16 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 	return &mon
 }
 
-type VFX struct {
-	Txtr         *sdl.Texture
-	Strip        [8]*sdl.Rect
-	DefaultSpeed uint8
-}
-
-type VFXInst struct {
-	Vfx      *VFX
-	Pos      *sdl.Rect
-	Pose     uint8
-	Tick     uint8
-	Ttl      int64
-	CurrTick uint8
-	Loop     uint8
-	Flip     Vector2d
-}
-
 func (vi *VFXInst) UpdateAnim() {
+	if vi.Text != nil {
+		vi.Pos.Y -= 1
+		vi.Pos.X -= 1
+		return
+	}
+	if vi.Vfx == nil {
+		return
+	}
+
 	vi.CurrTick -= 1
 	if vi.CurrTick == 0 {
 		vi.Pose += 1
@@ -1523,8 +1725,7 @@ func (vi *VFXInst) UpdateAnim() {
 }
 
 func (vi *VFXInst) Destroy() {
-	vi.Vfx = nil
-	vi.Pos = nil
+	vi.Vfx, vi.Pos = nil, nil
 }
 
 func (vi *VFXInst) CurrentFrame() *sdl.Rect {
@@ -1557,8 +1758,8 @@ func handleKeyEvent(key sdl.Keycode) Vector2d {
 			actProc()
 		}
 		return N
-	case KEY_LEFT_SHIT:
-		PC.Speed = (PC.BaseSpeed * 2)
+	case KEY_LEFT_SHIFT:
+		PC.Solid.Speed = ((PC.Solid.Speed + PC.SpeedMod) * 1.6)
 	case KEY_ARROW_UP:
 		return F_UP
 	case KEY_ARROW_DOWN:
@@ -1582,8 +1783,8 @@ func handleKeyUpEvent(key sdl.Keycode) {
 		if PC.Solid.Anim.PlayMode != 1 {
 			PC.CastSpell()
 		}
-	case KEY_LEFT_SHIT:
-		PC.Speed = PC.BaseSpeed
+	case KEY_LEFT_SHIFT:
+		PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
 	case KEY_ARROW_UP:
 		PC.Solid.Velocity.Y = 0
 	case KEY_ARROW_DOWN:
@@ -1600,42 +1801,56 @@ func catchEvents() bool {
 
 	PC.Solid.PlayAnimation()
 
+	KUs := []sdl.Keycode{}
+	KDs := []sdl.Keycode{}
+
 	for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
 			return false
 		case *sdl.KeyDownEvent:
-			v := handleKeyEvent(t.Keysym.Sym)
+			KDs = append(KDs, t.Keysym.Sym)
+			// v := handleKeyEvent(t.Keysym.Sym)
 
-			if v.X != 0 {
-				PC.Solid.Velocity.X = v.X
-				PC.Solid.Orientation.X = v.X
-				c = true
-			}
-			if v.Y != 0 {
-				PC.Solid.Velocity.Y = v.Y
-				PC.Solid.Orientation.Y = v.Y
-				c = true
-			}
+			// if v.X != 0 {
+			// 	PC.Solid.Velocity.X = v.X
+			// 	PC.Solid.Orientation.X = v.X
+			// 	c = true
+			// }
+			// if v.Y != 0 {
+			// 	PC.Solid.Velocity.Y = v.Y
+			// 	PC.Solid.Orientation.Y = v.Y
+			// 	c = true
+			// }
 		case *sdl.KeyUpEvent:
-			handleKeyUpEvent(t.Keysym.Sym)
+			KUs = append(KUs, t.Keysym.Sym)
+			// handleKeyUpEvent(t.Keysym.Sym)
 		}
 	}
 
-	if c { // && PC.Solid.Anim.PlayMode == 0
-		PC.Solid.procMovement(PC.Speed)
+	println(">1", KUs)
+	println(">2", KDs)
+
+	Controls.Update(KDs, KUs)
+	PC.Solid.UpdateVelocity(Controls)
+	PC.Solid.update_orientation()
+
+	if c && PC.Solid.Anim.PlayMode == 0 {
+		PC.Solid.procMovement()
 	}
 
-	if isMoving(PC.Solid.Velocity) && PC.Speed > PC.BaseSpeed {
+	if isMoving(PC.Solid.Velocity) && PC.Solid.Speed > PC.BaseSpeed+PC.SpeedMod {
+		// Play animation again when running
+		PC.Solid.PlayAnimation()
+
 		dpl := (PC.MaxST * 0.0009)
 
 		if PC.CurrentST <= dpl {
 			PC.CurrentST = 0
-			PC.Speed = PC.BaseSpeed
+			PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
 		} else {
 			PC.CurrentST -= dpl
 		}
-
 	} else {
 		if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
 			PC.CurrentST += (PC.MaxST * 0.001)
@@ -1736,7 +1951,7 @@ func main() {
 
 	puff = VFX{Txtr: puffTxt, Strip: PUFF_A, DefaultSpeed: 4}
 	hit = VFX{Txtr: hitTxt, Strip: HIT_A, DefaultSpeed: 4}
-	impact = VFX{Txtr: hitTxt, Strip: HIT_B, DefaultSpeed: 2}
+	impact = VFX{Txtr: hitTxt, Strip: HIT_B, DefaultSpeed: 3}
 
 	var running bool = true
 
