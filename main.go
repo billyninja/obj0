@@ -29,7 +29,7 @@ const (
 	KEY_ARROW_LEFT  = 1073741904
 	KEY_ARROW_RIGHT = 1073741903
 	KEY_LEFT_SHIFT  = 1073742049
-	KEY_SPACE_BAR   = 32 //1073741824 //
+	KEY_SPACE_BAR   = 1073741824 // 32
 	KEY_C           = 99
 	KEY_X           = 120
 	KEY_Z           = 80 // todo
@@ -171,7 +171,7 @@ var (
 		Lvl:       1,
 		CurrentXP: 0,
 		NextLvlXP: 100,
-		SpeedMod:  1,
+		SpeedMod:  0,
 		BaseSpeed: 2,
 		CurrentHP: 220,
 		MaxHP:     250,
@@ -237,102 +237,83 @@ type ControlState struct {
 }
 
 func (cs *ControlState) Update(keydown []sdl.Keycode, keyup []sdl.Keycode) {
-	for _, key := range keyup {
-		println("KUP", key)
-		switch key {
-		case KEY_ARROW_UP:
-			{
-				cs.DPAD.Y = 0
-			}
-			break
-		case KEY_ARROW_DOWN:
-			{
-				cs.DPAD.Y = 0
-			}
-			break
-		case KEY_ARROW_LEFT:
-			{
-				cs.DPAD.X = 0
-			}
-			break
-		case KEY_ARROW_RIGHT:
-			{
-				cs.DPAD.X = 0
-			}
-			break
-		case KEY_Z:
-			{
-				cs.ACTION_A = 0
-			}
-			break
-		case KEY_X:
-			{
-				cs.ACTION_B = 0
-			}
-			break
-		case KEY_C:
-			{
-				cs.ACTION_C = 0
-			}
-			break
-		case KEY_SPACE_BAR:
-			{
-				cs.ACTION_MAIN = 0
-			}
-			break
-		case KEY_LEFT_SHIFT:
-			{
-				cs.ACTION_MOD1 = 0
-			}
-			break
-		}
-	}
 	for _, key := range keydown {
 		switch key {
 		case KEY_ARROW_UP:
-			{
-				cs.DPAD.Y = -1
-			}
+			cs.DPAD.Y = -1
+			PC.Solid.Orientation.Y = -1
 			break
 		case KEY_ARROW_DOWN:
-			{
-				cs.DPAD.Y = 1
-			}
+			cs.DPAD.Y = 1
+			PC.Solid.Orientation.Y = 1
 			break
 		case KEY_ARROW_LEFT:
-			{
-				cs.DPAD.X = -1
-			}
+			cs.DPAD.X = -1
+			PC.Solid.Orientation.X = -1
 			break
 		case KEY_ARROW_RIGHT:
-			{
-				cs.DPAD.X = 1
-			}
+			cs.DPAD.X = 1
+			PC.Solid.Orientation.X = 1
 			break
 		case KEY_Z:
-			{
-				cs.ACTION_A += 1
-			}
+			cs.ACTION_A += 1
 			break
 		case KEY_X:
-			{
-				cs.ACTION_B += 1
-			}
+			cs.ACTION_B += 1
 			break
 		case KEY_C:
-			{
-				cs.ACTION_C += 1
-			}
+			cs.ACTION_C += 1
 			break
 		case KEY_SPACE_BAR:
-			{
-				cs.ACTION_MAIN += 1
-			}
+			cs.ACTION_MAIN += 1
 			break
 		case KEY_LEFT_SHIFT:
-			{
-				cs.ACTION_MOD1 += 1
+			cs.ACTION_MOD1 += 1
+			break
+		}
+	}
+	for _, key := range keyup {
+		switch key {
+		case KEY_ARROW_UP:
+			cs.DPAD.Y = 0
+			PC.Solid.Orientation.Y = 0
+			break
+		case KEY_ARROW_DOWN:
+			cs.DPAD.Y = 0
+			PC.Solid.Orientation.Y = 0
+			break
+		case KEY_ARROW_LEFT:
+			cs.DPAD.X = 0
+			PC.Solid.Orientation.X = 0
+			break
+		case KEY_ARROW_RIGHT:
+			cs.DPAD.X = 0
+			PC.Solid.Orientation.X = 0
+			break
+		case KEY_Z:
+			cs.ACTION_A = 0
+			break
+		case KEY_X:
+			if PC.Solid.Anim.PlayMode != 1 {
+				PC.MeleeAtk()
 			}
+			cs.ACTION_B = 0
+			break
+		case KEY_C:
+			if PC.Solid.Anim.PlayMode != 1 {
+				PC.CastSpell()
+			}
+			cs.ACTION_C = 0
+			break
+		case KEY_SPACE_BAR:
+			if !dbox.NextText() {
+				actProc()
+			}
+			cs.ACTION_MAIN = 0
+			break
+		case KEY_LEFT_SHIFT:
+			PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
+			cs.ACTION_MOD1 = 0
 			break
 		}
 	}
@@ -350,41 +331,26 @@ func ThrotleValue(v float32, limitAbs float64) float32 {
 
 func (s *Solid) UpdateVelocity(cs *ControlState) {
 
-	/*
-		v(-3, -3) -> c(-1, -1) | v(-3, -3)
-		v(-3, -3) -> c(0, -1) | v(-2, -3)
-		v(-2, -3) -> c(0, -1) | v(-1, -3)
-		v(-1, -3) -> c(0, -1) | v(0, -3)
-		v(0, -3) -> c(0, -1) | v(0, -3)
-	*/
-
+	nv := &Vector2d{}
+	*nv = *s.Velocity
 	if cs.DPAD.X != 0 || s.Velocity.X != 0 {
 		if cs.DPAD.X != 0 {
-			s.Velocity.X += cs.DPAD.X
-			s.Velocity.X = ThrotleValue(s.Velocity.X, 3)
+			nv.X += cs.DPAD.X
+			nv.X = ThrotleValue(nv.X, 2)
 		} else {
-			s.Velocity.X = float32(math.Abs(float64(s.Velocity.X))-1) * s.Orientation.X
+			nv.X = float32(math.Abs(float64(nv.X))-1) * s.Orientation.X
 		}
 	}
 
-	if cs.DPAD.Y != 0 || s.Velocity.Y != 0 {
+	if cs.DPAD.Y != 0 || nv.Y != 0 {
 		if cs.DPAD.Y != 0 {
-			s.Velocity.Y += cs.DPAD.Y
-			s.Velocity.Y = ThrotleValue(s.Velocity.Y, 3)
+			nv.Y += cs.DPAD.Y
+			nv.Y = ThrotleValue(nv.Y, 2)
 		} else {
-			s.Velocity.Y = float32(math.Abs(float64(s.Velocity.Y))-1) * s.Orientation.Y
+			nv.Y = float32(math.Abs(float64(nv.Y))-1) * s.Orientation.Y
 		}
 	}
-
-	println("VEL", s.Velocity.X, s.Velocity.Y)
-}
-
-func (s *Solid) update_orientation() {
-	cpX := math.Copysign(1, float64(s.Velocity.X))
-	cpY := math.Copysign(1, float64(s.Velocity.Y))
-
-	s.Orientation.X = float32(cpX)
-	s.Orientation.Y = float32(cpY)
+	*s.Velocity = *nv
 }
 
 type Camera struct {
@@ -623,11 +589,6 @@ func (ss *SpriteSheet) BuildBasicActions(actLength uint8, hasDiagonals bool) *Ac
 	return AM
 }
 
-// func PopText(position *sdl.Rect, content string, color sdl.Color) {
-// 	tEl := TextEl{font, content, CL_WHITE}
-// 	GUI = append(GUI)
-// }
-
 func (ss *SpriteSheet) GetPose(o Vector2d, p uint8) *sdl.Rect {
 
 	var (
@@ -742,7 +703,6 @@ func ResolveCol(ObjA *Solid, ObjB *Solid) {
 		ObjB.Handlers.OnCollEvent(ObjA, ObjB)
 	}
 	if ObjB.Collision == 1 {
-		ObjA.Speed = 0
 		ObjA.Velocity = &Vector2d{0, 0}
 	}
 }
@@ -969,7 +929,6 @@ func (s *Solid) PlayAnimation() {
 
 func (s *Solid) procMovement() {
 	speed := s.Speed
-	speed = 10
 	if s.Velocity.X != 0 && s.Velocity.Y != 0 {
 		speed -= 0.5
 		if speed < 1 {
@@ -999,7 +958,6 @@ func (s *Solid) procMovement() {
 		}
 	}
 
-	*s.Orientation = *s.Velocity
 	s.Position = np
 }
 
@@ -1043,7 +1001,6 @@ func (s *Solid) chase() {
 	if int32(diffX) < CharSize+10 && int32(diffY) < CharSize+10 && s.CharPtr != nil {
 
 		if s.CharPtr.AtkCoolDownC <= 0 {
-			*s.Orientation = *s.Velocity
 			r := ActHitBox(s.Position, s.Orientation)
 			Visual = append(Visual, hit.Spawn(r, s.Orientation))
 			if checkCol(r, PC.Solid.Position) {
@@ -1750,54 +1707,7 @@ func (v *VFX) Spawn(Position *sdl.Rect, flip *Vector2d) *VFXInst {
 	return i
 }
 
-func handleKeyEvent(key sdl.Keycode) Vector2d {
-	N := Vector2d{0, 0}
-	switch key {
-	case KEY_SPACE_BAR:
-		if !dbox.NextText() {
-			actProc()
-		}
-		return N
-	case KEY_LEFT_SHIFT:
-		PC.Solid.Speed = ((PC.Solid.Speed + PC.SpeedMod) * 1.6)
-	case KEY_ARROW_UP:
-		return F_UP
-	case KEY_ARROW_DOWN:
-		return F_DOWN
-	case KEY_ARROW_LEFT:
-		return F_LEFT
-	case KEY_ARROW_RIGHT:
-		return F_RIGHT
-	}
-
-	return N
-}
-
-func handleKeyUpEvent(key sdl.Keycode) {
-	switch key {
-	case KEY_X:
-		if PC.Solid.Anim.PlayMode != 1 {
-			PC.MeleeAtk()
-		}
-	case KEY_C:
-		if PC.Solid.Anim.PlayMode != 1 {
-			PC.CastSpell()
-		}
-	case KEY_LEFT_SHIFT:
-		PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
-	case KEY_ARROW_UP:
-		PC.Solid.Velocity.Y = 0
-	case KEY_ARROW_DOWN:
-		PC.Solid.Velocity.Y = 0
-	case KEY_ARROW_LEFT:
-		PC.Solid.Velocity.X = 0
-	case KEY_ARROW_RIGHT:
-		PC.Solid.Velocity.X = 0
-	}
-}
-
 func catchEvents() bool {
-	var c bool
 
 	PC.Solid.PlayAnimation()
 
@@ -1810,32 +1720,15 @@ func catchEvents() bool {
 			return false
 		case *sdl.KeyDownEvent:
 			KDs = append(KDs, t.Keysym.Sym)
-			// v := handleKeyEvent(t.Keysym.Sym)
-
-			// if v.X != 0 {
-			// 	PC.Solid.Velocity.X = v.X
-			// 	PC.Solid.Orientation.X = v.X
-			// 	c = true
-			// }
-			// if v.Y != 0 {
-			// 	PC.Solid.Velocity.Y = v.Y
-			// 	PC.Solid.Orientation.Y = v.Y
-			// 	c = true
-			// }
 		case *sdl.KeyUpEvent:
 			KUs = append(KUs, t.Keysym.Sym)
-			// handleKeyUpEvent(t.Keysym.Sym)
 		}
 	}
 
-	println(">1", KUs)
-	println(">2", KDs)
-
 	Controls.Update(KDs, KUs)
 	PC.Solid.UpdateVelocity(Controls)
-	PC.Solid.update_orientation()
 
-	if c && PC.Solid.Anim.PlayMode == 0 {
+	if PC.Solid.Anim.PlayMode == 0 {
 		PC.Solid.procMovement()
 	}
 
