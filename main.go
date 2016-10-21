@@ -331,6 +331,53 @@ func ThrotleValue(v float32, limitAbs float64) float32 {
 	return v
 }
 
+func ThrotleCeil(v float32, limitAbs float64) float32 {
+	v64 := float64(v)
+	abs := math.Abs(v64)
+	sign := math.Copysign(1, v64)
+	if abs > limitAbs {
+		return float32(limitAbs * sign)
+	}
+	return v
+}
+
+func ThrotleFloor(v float32, limitAbs float64) float32 {
+	if v < 0 {
+		return 0
+	}
+	return v
+}
+
+func (s *Solid) UpdateOrientation(inc float32, dcr float32) {
+	o = s.Orientation
+
+	if inc.X != 0 {
+		o.X += incX
+		o.X = ThrotleCeil(o.X, 3)
+		if incr.Y == 0 && dcr.Y == 0 && o.X < 3 {
+			o.Y -= 1
+		}
+	}
+
+	if inc.Y != 0 {
+		o.Y += inc.Y
+		o.Y = ThrotleCeil(o.Y, 3)
+		if inc.X == 0 && dcr.X == 0 && o.Y < 3 {
+			o.X -= 1
+		}
+	}
+
+	if dcr.X != 0 {
+		o.X -= dcr.X
+		o.X = ThrotleFloor(o.X, 0)
+	}
+
+	if dcr.Y != 0 {
+		o.Y -= dcr.Y
+		o.Y = ThrotleFloor(o.Y, 0)
+	}
+}
+
 func (s *Solid) UpdateVelocity(cs *ControlState) {
 
 	nv := &Vector2d{}
