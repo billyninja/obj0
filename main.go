@@ -29,13 +29,13 @@ const (
 	KEY_ARROW_LEFT  = 1073741904
 	KEY_ARROW_RIGHT = 1073741903
 	KEY_LEFT_SHIFT  = 1073742049
-	KEY_SPACE_BAR   = 32 // 1073741824
+	KEY_SPACE_BAR   = 1073741824 // 32
 	KEY_C           = 99
 	KEY_X           = 120
 	KEY_Z           = 80 // todo
 
 	AI_TICK_LENGTH    = 2
-	EVENT_TICK_LENGTH = 2
+	EVENT_TICK_LENGTH = 3
 )
 
 var (
@@ -240,20 +240,16 @@ func (cs *ControlState) Update(keydown []sdl.Keycode, keyup []sdl.Keycode) {
 	for _, key := range keydown {
 		switch key {
 		case KEY_ARROW_UP:
-			cs.DPAD.Y = -1
-			PC.Solid.Orientation.Y = -1
+			cs.DPAD.Y -= 1
 			break
 		case KEY_ARROW_DOWN:
-			cs.DPAD.Y = 1
-			PC.Solid.Orientation.Y = 1
+			cs.DPAD.Y += 1
 			break
 		case KEY_ARROW_LEFT:
-			cs.DPAD.X = -1
-			PC.Solid.Orientation.X = -1
+			cs.DPAD.X -= 1
 			break
 		case KEY_ARROW_RIGHT:
-			cs.DPAD.X = 1
-			PC.Solid.Orientation.X = 1
+			cs.DPAD.X += 1
 			break
 		case KEY_Z:
 			cs.ACTION_A += 1
@@ -277,20 +273,16 @@ func (cs *ControlState) Update(keydown []sdl.Keycode, keyup []sdl.Keycode) {
 		switch key {
 		case KEY_ARROW_UP:
 			cs.DPAD.Y = 0
-			PC.Solid.Orientation.Y = 0
 			PC.Solid.Speed = PC.Solid.Speed + PC.SpeedMod
 			break
 		case KEY_ARROW_DOWN:
 			cs.DPAD.Y = 0
-			PC.Solid.Orientation.Y = 0
 			break
 		case KEY_ARROW_LEFT:
 			cs.DPAD.X = 0
-			PC.Solid.Orientation.X = 0
 			break
 		case KEY_ARROW_RIGHT:
 			cs.DPAD.X = 0
-			PC.Solid.Orientation.X = 0
 			break
 		case KEY_Z:
 			cs.ACTION_A = 0
@@ -331,61 +323,13 @@ func ThrotleValue(v float32, limitAbs float64) float32 {
 	return v
 }
 
-func ThrotleCeil(v float32, limitAbs float64) float32 {
-	v64 := float64(v)
-	abs := math.Abs(v64)
-	sign := math.Copysign(1, v64)
-	if abs > limitAbs {
-		return float32(limitAbs * sign)
-	}
-	return v
-}
-
-func ThrotleFloor(v float32, limitAbs float64) float32 {
-	if v < 0 {
-		return 0
-	}
-	return v
-}
-
-func (s *Solid) UpdateOrientation(inc float32, dcr float32) {
-	o = s.Orientation
-
-	if inc.X != 0 {
-		o.X += incX
-		o.X = ThrotleCeil(o.X, 3)
-		if incr.Y == 0 && dcr.Y == 0 && o.X < 3 {
-			o.Y -= 1
-		}
-	}
-
-	if inc.Y != 0 {
-		o.Y += inc.Y
-		o.Y = ThrotleCeil(o.Y, 3)
-		if inc.X == 0 && dcr.X == 0 && o.Y < 3 {
-			o.X -= 1
-		}
-	}
-
-	if dcr.X != 0 {
-		o.X -= dcr.X
-		o.X = ThrotleFloor(o.X, 0)
-	}
-
-	if dcr.Y != 0 {
-		o.Y -= dcr.Y
-		o.Y = ThrotleFloor(o.Y, 0)
-	}
-}
-
 func (s *Solid) UpdateVelocity(cs *ControlState) {
 
 	nv := &Vector2d{}
 	*nv = *s.Velocity
 	if cs.DPAD.X != 0 || s.Velocity.X != 0 {
 		if cs.DPAD.X != 0 {
-			nv.X += cs.DPAD.X
-			nv.X = ThrotleValue(nv.X, 2)
+			nv.X = ThrotleValue(nv.X+cs.DPAD.X, 2)
 		} else {
 			nv.X = float32(math.Abs(float64(nv.X))-1) * s.Orientation.X
 		}
@@ -393,8 +337,7 @@ func (s *Solid) UpdateVelocity(cs *ControlState) {
 
 	if cs.DPAD.Y != 0 || nv.Y != 0 {
 		if cs.DPAD.Y != 0 {
-			nv.Y += cs.DPAD.Y
-			nv.Y = ThrotleValue(nv.Y, 2)
+			nv.Y = ThrotleValue(nv.Y+cs.DPAD.Y, 2)
 		} else {
 			nv.Y = float32(math.Abs(float64(nv.Y))-1) * s.Orientation.Y
 		}
@@ -1582,10 +1525,14 @@ func (s *Scene) update() {
 } // end update()
 
 func debug_info(renderer *sdl.Renderer) {
-	dbg_content := fmt.Sprintf("px %d py %d|Cx %.1f Cy %.1f | vx %.1f vy %.1f (%.1f, %.1f) An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
-		PC.Solid.Position.X, PC.Solid.Position.Y, Controls.DPAD.X, Controls.DPAD.Y, PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Orientation.X,
-		PC.Solid.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick, PC.Solid.Anim.PlayMode, len(CullMap),
-		len(Interactive), Cam.P.X, Cam.P.Y, game_latency, EventTick, AiTick)
+	dbg_content := fmt.Sprintf(
+		"px %d py %d | Cx %.1f Cy %.1f |vx %.1f vy | %.1f (%.1f, %.1f) |"+
+			" An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
+		PC.Solid.Position.X, PC.Solid.Position.Y, Controls.DPAD.X, Controls.DPAD.Y,
+		PC.Solid.Velocity.X, PC.Solid.Velocity.Y, PC.Solid.Orientation.X,
+		PC.Solid.Orientation.Y, PC.Solid.Anim.Pose, PC.Solid.Anim.PoseTick,
+		PC.Solid.Anim.PlayMode, len(CullMap), len(Interactive), Cam.P.X, Cam.P.Y,
+		game_latency, EventTick, AiTick)
 
 	dbg_TextEl := TextEl{
 		Font:    font,
@@ -1792,6 +1739,21 @@ func catchEvents() bool {
 
 	Controls.Update(KDs, KUs)
 	PC.Solid.UpdateVelocity(Controls)
+
+	if Controls.DPAD.X != 0 {
+		PC.Solid.Orientation.X = ThrotleValue(Controls.DPAD.X, 1)
+	} else {
+		if math.Abs(float64(Controls.DPAD.Y)) > 1 {
+			PC.Solid.Orientation.X = 0
+		}
+	}
+	if Controls.DPAD.Y != 0 {
+		PC.Solid.Orientation.Y = ThrotleValue(Controls.DPAD.Y, 1)
+	} else {
+		if math.Abs(float64(Controls.DPAD.X)) > 1 {
+			PC.Solid.Orientation.Y = 0
+		}
+	}
 
 	if PC.Solid.Anim.PlayMode == 0 {
 		PC.Solid.procMovement()
