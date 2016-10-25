@@ -40,6 +40,7 @@ const (
 )
 
 var (
+	wld          [][]*tmx.Terrain
 	event        sdl.Event
 	font         *ttf.Font
 	game_latency time.Duration
@@ -1060,7 +1061,6 @@ func (s *Solid) chase() {
 				println("miss")
 			}
 			s.CharPtr.AtkCoolDownC += s.CharPtr.AtkCoolDown
-			println(s.CharPtr, s.CharPtr.AtkCoolDownC)
 		}
 
 		return
@@ -1124,7 +1124,6 @@ func (s *Scene) build() {
 		World[i] = make([]*sdl.Rect, nj)
 
 		for j := 0; j < nj; j++ {
-			println("c", i, j)
 			tile := s.tileA
 			if rand.Int31n(100) < 10 {
 				tile = s.tileB
@@ -1243,6 +1242,41 @@ func (s *Scene) populate(population int) {
 			break
 		}
 
+	}
+}
+
+func (s *Scene) _terrainRender2(renderer *sdl.Renderer) {
+	var Source *sdl.Rect
+	var init int32 = 0
+
+	var offsetX, offsetY int32 = TSzi, TSzi
+	// Rendering the terrain
+	for winY := init; winY < winHeight; winY += offsetY {
+		for winX := init; winX < winWidth; winX += offsetX {
+
+			offsetX = (TSzi - (int32(Cam.P.X)+winX)%TSzi)
+			offsetY = (TSzi - (int32(Cam.P.Y)+winY)%TSzi)
+
+			worldCellX := uint16((int32(Cam.P.X) + winX) / TSzi)
+			worldCellY := uint16((int32(Cam.P.Y) + winY) / TSzi)
+			screenPos := sdl.Rect{winX, winY, offsetX, offsetY}
+
+			if worldCellX > uint16(len(wld[0])) || worldCellY > uint16(len(wld)) || worldCellX < 0 || worldCellY < 0 {
+				continue
+			}
+
+			gfx := wld[worldCellY][worldCellX].Source
+
+			if offsetX != TSzi || offsetY != TSzi {
+				Source = &sdl.Rect{gfx.X + (TSzi - offsetX), gfx.Y + (TSzi - offsetY), offsetX, offsetY}
+			} else {
+				Source = gfx
+			}
+			if Source != nil && &screenPos != nil {
+			}
+			//println(s.TileSet, Source, &screenPos)
+			renderer.Copy(s.TileSet, Source, &screenPos)
+		}
 	}
 }
 
@@ -1418,7 +1452,7 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 	renderer.Clear()
 	scrPos := worldToScreen(PC.Solid.Position, Cam)
 
-	s._terrainRender(renderer)
+	s._terrainRender2(renderer)
 	s._solidsRender(renderer)
 	s._monstersRender(renderer)
 	// Rendering the PC
@@ -1925,13 +1959,7 @@ func main() {
 	hit = VFX{Txtr: hitTxt, Strip: HIT_A, DefaultSpeed: 4}
 	impact = VFX{Txtr: hitTxt, Strip: HIT_B, DefaultSpeed: 3}
 
-	wld := tmx.LoadTMXFile("assets/world.tmx", renderer)
-	for rI, _ := range wld {
-		for cI, _ := range wld[rI] {
-			tr := wld[rI][cI]
-			println(">", rI, cI, tr.Source.X, tr.Source.Y, tr.Source.W, tr.Source.H)
-		}
-	}
+	wld = tmx.LoadTMXFile("assets/world.tmx", renderer)
 
 	var running bool = true
 
