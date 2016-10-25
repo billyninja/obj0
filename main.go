@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/billyninja/obj0/tmx"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/sdl_image"
 	"github.com/veandco/go-sdl2/sdl_ttf"
+
 	"math"
 	"math/rand"
 	"runtime"
@@ -505,9 +507,12 @@ type Char struct {
 
 type TextEl struct {
 	Font         *ttf.Font
-	Content      string
 	Color        sdl.Color
+	Content      string
 	BakedContent string
+	Txtr         *sdl.Texture
+	TW           int32
+	TH           int32
 }
 
 type DBox struct {
@@ -659,11 +664,16 @@ func (db *DBox) Present(renderer *sdl.Renderer) {
 }
 
 func (t *TextEl) Bake(renderer *sdl.Renderer) (*sdl.Texture, int32, int32) {
+	if t.Content == t.BakedContent {
+		return t.Txtr, t.TW, t.TH
+	}
+
 	surface, _ := t.Font.RenderUTF8_Blended_Wrapped(t.Content, t.Color, int(winWidth))
 	defer surface.Free()
-	txtr, _ := renderer.CreateTextureFromSurface(surface)
+	t.Txtr, _ = renderer.CreateTextureFromSurface(surface)
+	t.TW, t.TH = surface.W, surface.H
 
-	return txtr, surface.W, surface.H
+	return t.Txtr, t.TW, t.TH
 }
 
 func ProjectHitBox(origin *Vector2d, orientation *Vector2d, length float32, distance *Vector2d, comp float32) *sdl.Rect {
@@ -715,18 +725,17 @@ func (s *Solid) ApplyMovement() *sdl.Rect {
 	}
 }
 
-func ResolveCol(ObjA *Solid, ObjB *Solid) {
-
+func ResolveCol(ObjA *Solid, ObjB *Solid) bool {
+	var halt bool
 	if ObjB.Collision == 1 {
-		if ObjA.Velocity != nil {
-			ObjA.Velocity.X = 0
-			ObjA.Velocity.Y = 0
-		}
+		halt = true
 	}
 
 	if ObjB.Handlers != nil && ObjB.Handlers.OnCollEvent != nil {
 		ObjB.Handlers.OnCollEvent(ObjA, ObjB)
 	}
+
+	return halt
 }
 
 func Center(r *sdl.Rect) *Vector2d {
@@ -980,6 +989,16 @@ func (s *Solid) procMovement() {
 		return
 	}
 
+	fr := feetRect(np)
+	for _, obj := range CullMap {
+		if obj.Position == nil || obj == s {
+			continue
+		}
+		if checkCol(fr, obj.Position) && ResolveCol(s, obj) {
+			return
+		}
+	}
+
 	if s.CharPtr != nil {
 		anim := s.CharPtr.CurrentFacing()
 		if anim != nil && s.Anim != nil && s.Anim.PlayMode != 1 {
@@ -988,17 +1007,7 @@ func (s *Solid) procMovement() {
 		}
 	}
 
-	fr := feetRect(np)
-	for _, obj := range CullMap {
-		if obj.Position == nil {
-			continue
-		}
-		if checkCol(fr, obj.Position) {
-			ResolveCol(PC.Solid, obj)
-		}
-	}
-
-	s.Position = s.ApplyMovement()
+	s.Position = np
 }
 
 func (s *Solid) LoSCheck() bool {
@@ -1038,7 +1047,7 @@ func (s *Solid) chase() {
 		s.Velocity.Y = 1
 	}
 
-	if diffX < 32 && diffY < 32 && s.CharPtr != nil {
+	if diffX < 80 && diffY < 80 && s.CharPtr != nil {
 		if s.CharPtr.AtkCoolDownC <= 0 {
 			r := ProjectHitBox(Center(s.Position), s.Orientation, 32, nil, 1)
 			Visual = append(Visual, hit.Spawn(r, s.Orientation))
@@ -1113,7 +1122,6 @@ func (s *Scene) build() {
 
 	for i := 0; i < ni; i++ {
 		World[i] = make([]*sdl.Rect, nj)
-		println("Allocation columns for", i, nj)
 
 		for j := 0; j < nj; j++ {
 			println("c", i, j)
@@ -1426,6 +1434,25 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 	renderer.Present()
 }
 
+func (cam *Camera) RecenterCamera(target *sdl.Rect) {
+	newScreenPos := worldToScreen(target, Cam)
+	if (cam.DZx - newScreenPos.X) > 0 {
+		cam.P.X -= float32(cam.DZx - newScreenPos.X)
+	}
+
+	if (winWidth - cam.DZx) < (newScreenPos.X + TSzi) {
+		cam.P.X += float32((newScreenPos.X + TSzi) - (winWidth - cam.DZx))
+	}
+
+	if (cam.DZy - newScreenPos.Y) > 0 {
+		cam.P.Y -= float32(cam.DZy - newScreenPos.Y)
+	}
+
+	if (winHeight - cam.DZy) < (newScreenPos.Y + TSzi) {
+		cam.P.Y += float32((newScreenPos.Y + TSzi) - (winHeight - cam.DZy))
+	}
+}
+
 func (s *Scene) update() {
 	EventTick -= 1
 	AiTick -= 1
@@ -1441,41 +1468,26 @@ func (s *Scene) update() {
 		AiTick = AI_TICK_LENGTH
 	}
 
-	newScreenPos := worldToScreen(PC.Solid.Position, Cam)
-	if (Cam.DZx - newScreenPos.X) > 0 {
-		Cam.P.X -= float32(Cam.DZx - newScreenPos.X)
-	}
+	Cam.RecenterCamera(PC.Solid.Position)
 
-	if (winWidth - Cam.DZx) < (newScreenPos.X + TSzi) {
-		Cam.P.X += float32((newScreenPos.X + TSzi) - (winWidth - Cam.DZx))
-	}
-
-	if (Cam.DZy - newScreenPos.Y) > 0 {
-		Cam.P.Y -= float32(Cam.DZy - newScreenPos.Y)
-	}
-
-	if (winHeight - Cam.DZy) < (newScreenPos.Y + TSzi) {
-		Cam.P.Y += float32((newScreenPos.Y + TSzi) - (winHeight - Cam.DZy))
-	}
-
-	for _, i := range CullMap {
-		if i.Position == nil {
+	for _, obj := range CullMap {
+		if obj.Position == nil {
 			continue
 		}
 		// Ttl kill
-		if i.Ttl > 0 && i.Ttl < now {
-			i.Destroy()
+		if obj.Ttl > 0 && obj.Ttl < now {
+			obj.Destroy()
 			continue
 		}
 
-		if i.CharPtr != nil && i.CharPtr.CurrentHP <= 0 {
-			if i.CharPtr.Drop != nil {
-				PlaceDrop(i.CharPtr.Drop, i.Position)
+		if obj.CharPtr != nil && obj.CharPtr.CurrentHP <= 0 {
+			if obj.CharPtr.Drop != nil {
+				PlaceDrop(obj.CharPtr.Drop, obj.Position)
 			}
-			Visual = append(Visual, puff.Spawn(&sdl.Rect{i.Position.X, i.Position.Y, 92, 92}, nil))
-			i.Destroy()
+			Visual = append(Visual, puff.Spawn(&sdl.Rect{obj.Position.X, obj.Position.Y, 92, 92}, nil))
+			obj.Destroy()
 
-			PC.CurrentXP += uint16(i.CharPtr.MaxHP / 10)
+			PC.CurrentXP += uint16(obj.CharPtr.MaxHP / 10)
 			if PC.CurrentXP >= PC.NextLvlXP {
 				PC.CurrentXP = 0
 				PC.Lvl++
@@ -1484,42 +1496,27 @@ func (s *Scene) update() {
 			continue
 		}
 
-		fr := feetRect(PC.Solid.Position)
-		if checkCol(fr, i.Position) {
-			ResolveCol(PC.Solid, i)
-		}
-
-		if i.Anim != nil {
-			i.PlayAnimation()
+		if obj.Anim != nil {
+			obj.PlayAnimation()
 		}
 
 		if AiTick == 0 {
 
-			if i.Anim != nil && i.Anim.PlayMode == 1 {
+			if obj.Anim != nil && obj.Anim.PlayMode == 1 {
 				continue
 			}
-			if i.CharPtr != nil {
-				i.CharPtr.AtkCoolDownC -= i.CharPtr.AtkSpeed
+			if obj.CharPtr != nil {
+				obj.CharPtr.AtkCoolDownC -= obj.CharPtr.AtkSpeed
 			}
 
-			if i.Chase != nil && i.LoSCheck() {
-				i.chase()
+			if obj.Chase != nil && obj.LoSCheck() {
+				obj.chase()
 			} else {
 				var sp float32 = 2
-				if i.CharPtr != nil {
-					sp = i.Speed
+				if obj.CharPtr != nil {
+					sp = obj.Speed
 				}
-				i.peformPattern(sp)
-			}
-		}
-
-		for _, j := range CullMap {
-			if j == i || j.Position == nil || i.Position == nil {
-				continue
-			}
-			fr := feetRect(i.Position)
-			if checkCol(fr, j.Position) {
-				ResolveCol(i, j)
+				obj.peformPattern(sp)
 			}
 		}
 	}
@@ -1660,8 +1657,7 @@ func MonsterFactory(monsterTpl *MonsterTemplate, lvlMod uint8, pos Vector2d) *Ch
 	lvl := uint8((monsterTpl.Lvl + lvlMod) + variance)
 	hp := monsterTpl.HP + float32(lvl*2)
 	sizeMod := int32(float32(lvl-monsterTpl.Lvl) * monsterTpl.ScalingFactor)
-	W := (monsterTpl.Size + sizeMod)
-	H := (monsterTpl.Size + sizeMod)
+	W, H := (monsterTpl.Size + sizeMod), (monsterTpl.Size + sizeMod)
 
 	var DropItem *Item
 	var sumP float32
@@ -1787,14 +1783,20 @@ func catchEvents() bool {
 		PC.Solid.Orientation.X = ThrotleValue(Controls.DPAD.X, 1)
 	} else {
 		if Abs32(Controls.DPAD.Y) > 1 {
-			PC.Solid.Orientation.X = 0
+			PC.Solid.Orientation.X -= 1
+			if PC.Solid.Orientation.X < 0 {
+				PC.Solid.Orientation.X = 0
+			}
 		}
 	}
 	if Controls.DPAD.Y != 0 {
 		PC.Solid.Orientation.Y = ThrotleValue(Controls.DPAD.Y, 1)
 	} else {
 		if Abs32(Controls.DPAD.X) > 1 {
-			PC.Solid.Orientation.Y = 0
+			PC.Solid.Orientation.Y -= 1
+			if PC.Solid.Orientation.Y < 0 {
+				PC.Solid.Orientation.Y = 0
+			}
 		}
 	}
 
@@ -1802,24 +1804,25 @@ func catchEvents() bool {
 		PC.Solid.procMovement()
 	}
 
-	if isMoving(PC.Solid.Velocity) && PC.Solid.Speed > PC.BaseSpeed+PC.SpeedMod {
+	if isMoving(PC.Solid.Velocity) && Controls.ACTION_MOD1 > 0 {
 		// HACK - Play animation again when running
 		PC.Solid.PlayAnimation()
-		if EventTick == 2 && (PC.Solid.Position.X*2+PC.Solid.Position.Y)%4 == 0 {
+		r := (rand.Int31n(128) * PC.Solid.Position.X * PC.Solid.Position.Y)
+		if EventTick == 2 && r%3 == 0 {
 			dust := feetRect(PC.Solid.Position)
-			dust.Y -= int32(24 * PC.Solid.Orientation.Y)
-			dust.X -= int32(24 * PC.Solid.Orientation.X)
+			dust.Y += int32(24 * PC.Solid.Orientation.Y)
+			dust.X += int32(24 * PC.Solid.Orientation.X)
 			Visual = append(Visual, puff.Spawn(dust, nil))
 		}
 
 		dpl := (PC.MaxST * 0.0009)
-
 		if PC.CurrentST <= dpl {
 			PC.CurrentST = 0
 			PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
 		} else {
 			PC.CurrentST -= dpl
 		}
+
 	} else {
 		if !isMoving(PC.Solid.Velocity) && PC.CurrentST < PC.MaxST {
 			PC.CurrentST += (PC.MaxST * 0.001)
@@ -1827,15 +1830,6 @@ func catchEvents() bool {
 	}
 
 	return true
-}
-
-func Scale(r *sdl.Rect, s float32) *sdl.Rect {
-	return &sdl.Rect{
-		r.X,
-		r.Y,
-		int32(float32(r.W) * s),
-		int32(float32(r.H) * s),
-	}
 }
 
 func main() {
@@ -1930,6 +1924,14 @@ func main() {
 	puff = VFX{Txtr: puffTxt, Strip: PUFF_A, DefaultSpeed: 4}
 	hit = VFX{Txtr: hitTxt, Strip: HIT_A, DefaultSpeed: 4}
 	impact = VFX{Txtr: hitTxt, Strip: HIT_B, DefaultSpeed: 3}
+
+	wld := tmx.LoadTMXFile("assets/world.tmx", renderer)
+	for rI, _ := range wld {
+		for cI, _ := range wld[rI] {
+			tr := wld[rI][cI]
+			println(">", rI, cI, tr.Source.X, tr.Source.Y, tr.Source.W, tr.Source.H)
+		}
+	}
 
 	var running bool = true
 
