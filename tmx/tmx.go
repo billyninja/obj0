@@ -92,7 +92,7 @@ func (ts *TileSet) GetGIDRect(gid int32) *sdl.Rect {
 
 func (ts *TileSet) Load(renderer *sdl.Renderer) {
 
-	tilesetImg, err := img.Load("assets/" + ts.Image.Src)
+	tilesetImg, err := img.Load("data/assets/" + ts.Image.Src)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load PNG: %s\n", err)
 		os.Exit(3)
@@ -150,15 +150,19 @@ func (ts *TileSet) Load(renderer *sdl.Renderer) {
 
 func LoadTMXFile(mapname string, renderer *sdl.Renderer) (*TMX, [][]*Terrain) {
 
-	f, _ := os.Open(mapname)
+	f, err := os.Open(mapname)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening the tmx map: %s\n", err)
+		os.Exit(2)
+	}
 	output, _ := ioutil.ReadAll(f)
 	_ = f.Close()
 
 	tmx := &TMX{}
-	err := xml.Unmarshal(output, tmx)
+	err = xml.Unmarshal(output, tmx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing the tmx map: %s\n", err)
-		os.Exit(11)
+		os.Exit(3)
 	}
 
 	for i := 0; i < len(tmx.Tilesets); i++ {
