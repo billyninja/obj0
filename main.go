@@ -30,7 +30,7 @@ const (
 	KEY_ARROW_LEFT  = 1073741904
 	KEY_ARROW_RIGHT = 1073741903
 	KEY_LEFT_SHIFT  = 1073742049
-	KEY_SPACE_BAR   = 1073741824 // 32
+	KEY_SPACE_BAR   = 32 // 1073741824 | 32
 	KEY_C           = 99
 	KEY_X           = 120
 	KEY_Z           = 80 // todo
@@ -47,7 +47,6 @@ var (
 	Controls     *ControlState = &ControlState{}
 
 	CL_WHITE        sdl.Color    = sdl.Color{255, 255, 255, 255}
-	tilesetTxt      *sdl.Texture = nil
 	spritesheetTxt  *sdl.Texture = nil
 	particlesTxt    *sdl.Texture = nil
 	powerupsTxt     *sdl.Texture = nil
@@ -140,27 +139,6 @@ var (
 	puff   VFX             = VFX{}
 	hit    VFX             = VFX{}
 	impact VFX             = VFX{}
-
-	SCN_PLAINS *Scene = &Scene{
-		codename:   "plains",
-		CellsX:     50,
-		CellsY:     30,
-		CamPoint:   Vector2d{120, 120},
-		StartPoint: Vector2d{300, 200},
-		tileA:      GRASS,
-		tileB:      DIRT,
-	}
-	SCN_CAVE = &Scene{
-		codename:   "cave",
-		CellsX:     15,
-		CellsY:     20,
-		StartPoint: Vector2d{100, 100},
-		CamPoint:   Vector2d{0, 0},
-		tileA:      DIRT,
-		tileB:      LAVA_S1,
-	}
-
-	SCENES []*Scene = []*Scene{SCN_PLAINS, SCN_CAVE}
 
 	Cam = Camera{Vector2d{0, 0}, 320, 256}
 
@@ -353,14 +331,16 @@ type Camera struct {
 }
 
 type Scene struct {
-	codename   string
-	TileSet    *sdl.Texture
-	CellsX     int32
-	CellsY     int32
-	StartPoint Vector2d
-	CamPoint   Vector2d
-	tileA      *sdl.Rect
-	tileB      *sdl.Rect
+	codename    string
+	TileSet     *sdl.Texture
+	World       [][]*tmx.Terrain
+	Interactive []*Solid
+	CellsX      int32
+	CellsY      int32
+	StartPoint  Vector2d
+	CamPoint    Vector2d
+	tileA       *sdl.Rect
+	tileB       *sdl.Rect
 }
 
 type Event func(source *Solid, subject *Solid)
@@ -448,7 +428,7 @@ type InteractionHandlers struct {
 	OnActPush      *Vector2d
 	OnActEvent     Event
 	DialogScript   []string
-	DoorTo         *Scene
+	DoorTo         string
 }
 
 type Solid struct {
@@ -790,7 +770,7 @@ func ReleaseSpell(caster *Solid, tgt *Solid) {
 		Collision: 1,
 		Speed:     6,
 	}
-	Interactive = append(Interactive, h)
+	scene.Interactive = append(scene.Interactive, h)
 }
 
 func PickUp(picker *Solid, item *Solid) {
@@ -823,7 +803,7 @@ func PlayDialog(listener *Solid, speaker *Solid) {
 
 func BashDoor(actor *Solid, door *Solid) {
 	if actor == PC.Solid {
-		change_scene(door.Handlers.DoorTo, nil)
+		scene = load_scene(door.Handlers.DoorTo, nil)
 	}
 }
 
@@ -1102,45 +1082,57 @@ func (s *Solid) Destroy() {
 	s.Collision = 0
 }
 
-func change_scene(new_scene *Scene, staring_pos *Vector2d) {
-	new_scene.build()
-	Interactive = []*Solid{}
-	new_scene.populate(200)
-	scene = new_scene
+func (s *Scene) SolidFromTerrain(terr *tmx.Terrain, cellX int32, cellY int32) {
+	pos := &sdl.Rect{cellY * TSzi, cellX * TSzi, TSzi, TSzi}
+	for _, tt := range terr.TerrainTypes {
+		if tt == nil {
+			continue
+		}
+		var sol *Solid
 
-	PC.Solid.Position = V2R(new_scene.StartPoint, CharSize, CharSize)
-	PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
-}
-
-func (s *Scene) build() {
-	ni, nj := int(s.CellsX)+1, int(s.CellsY)+1
-
-	println("start build: ", s.codename)
-	rand.Seed(int64(time.Now().Nanosecond()))
-	World = make([][]*sdl.Rect, ni)
-	println("Allocation rows", ni)
-
-	for i := 0; i < ni; i++ {
-		World[i] = make([]*sdl.Rect, nj)
-
-		for j := 0; j < nj; j++ {
-			tile := s.tileA
-			if rand.Int31n(100) < 10 {
-				tile = s.tileB
+		switch tt.Name {
+		case "COLL_BLOCK":
+			sol = &Solid{
+				Position:  pos,
+				Collision: 1,
 			}
-
-			World[i][j] = tile
+			break
+		}
+		if sol != nil {
+			println(tt.Name, pos.X, pos.Y)
+			s.Interactive = append(s.Interactive, sol)
 		}
 	}
+}
 
-	println("==finish build: ", s.codename)
+func load_scene(mapname string, renderer *sdl.Renderer) *Scene {
+	tmx, wld := tmx.LoadTMXFile("assets/world.tmx", renderer)
+
+	PC.Solid.Position = V2R(Vector2d{2000, 2500}, CharSize, CharSize)
+	PC.Solid.Speed = PC.BaseSpeed + PC.SpeedMod
+
+	scn := &Scene{
+		codename: mapname,
+		TileSet:  tmx.Tilesets[0].Txtr,
+		World:    wld,
+		CellsX:   tmx.WidthTiles,
+		CellsY:   tmx.HeightTiles,
+	}
+
+	// TODO func populate2
+	var y int32 = 0
+	for ; y < scn.CellsY; y++ {
+		var x int32 = 0
+		for ; x < scn.CellsX; x++ {
+			scn.SolidFromTerrain(wld[x][y], x, y)
+		}
+	}
+	scn.populate(200)
+
+	return scn
 }
 
 func (s *Scene) populate(population int) {
-	doorTo := SCN_PLAINS
-	if s.codename == "plains" {
-		doorTo = SCN_CAVE
-	}
 
 	for i := 0; i < population; i++ {
 		cX, cY := rand.Int31n(s.CellsX), rand.Int31n(s.CellsY)
@@ -1160,21 +1152,7 @@ func (s *Scene) populate(population int) {
 				},
 				Collision: 0,
 			}
-			Interactive = append(Interactive, sol)
-			break
-		case 2:
-			sol = &Solid{
-				Position:  absolute_pos,
-				Txt:       s.TileSet,
-				Source:    DOOR,
-				Anim:      nil,
-				Collision: 1,
-				Handlers: &InteractionHandlers{
-					OnActEvent: BashDoor,
-					DoorTo:     doorTo,
-				},
-			}
-			Interactive = append(Interactive, sol)
+			s.Interactive = append(s.Interactive, sol)
 			break
 		case 3:
 			absolute_pos.H, absolute_pos.W = 64, 64
@@ -1192,7 +1170,7 @@ func (s *Scene) populate(population int) {
 					},
 				},
 			}
-			Interactive = append(Interactive, sol)
+			s.Interactive = append(s.Interactive, sol)
 			break
 		case 4:
 			absolute_pos.W, absolute_pos.H = 128, 128
@@ -1257,15 +1235,18 @@ func (s *Scene) _terrainRender2(renderer *sdl.Renderer) {
 			offsetX = (TSzi - (int32(Cam.P.X)+winX)%TSzi)
 			offsetY = (TSzi - (int32(Cam.P.Y)+winY)%TSzi)
 
-			worldCellX := uint16((int32(Cam.P.X) + winX) / TSzi)
-			worldCellY := uint16((int32(Cam.P.Y) + winY) / TSzi)
+			currCellX := (int32(Cam.P.X) + winX) / TSzi
+			currCellY := (int32(Cam.P.Y) + winY) / TSzi
 			screenPos := sdl.Rect{winX, winY, offsetX, offsetY}
 
-			if worldCellX > uint16(len(wld[0])) || worldCellY > uint16(len(wld)) || worldCellX < 0 || worldCellY < 0 {
+			if currCellX >= s.CellsX || currCellY >= s.CellsY || currCellX < 0 || currCellY < 0 {
 				continue
 			}
-
-			gfx := wld[worldCellY][worldCellX].Source
+			cell := s.World[currCellY][currCellX]
+			if cell.Source == nil {
+				continue
+			}
+			gfx := cell.Source
 
 			if offsetX != TSzi || offsetY != TSzi {
 				Source = &sdl.Rect{gfx.X + (TSzi - offsetX), gfx.Y + (TSzi - offsetY), offsetX, offsetY}
@@ -1274,42 +1255,7 @@ func (s *Scene) _terrainRender2(renderer *sdl.Renderer) {
 			}
 			if Source != nil && &screenPos != nil {
 			}
-			//println(s.TileSet, Source, &screenPos)
-			renderer.Copy(s.TileSet, Source, &screenPos)
-		}
-	}
-}
 
-func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
-	var Source *sdl.Rect
-	var init int32 = 0
-
-	var offsetX, offsetY int32 = TSzi, TSzi
-	// Rendering the terrain
-	for winY := init; winY < winHeight; winY += offsetY {
-		for winX := init; winX < winWidth; winX += offsetX {
-
-			offsetX = (TSzi - (int32(Cam.P.X)+winX)%TSzi)
-			offsetY = (TSzi - (int32(Cam.P.Y)+winY)%TSzi)
-
-			worldCellX := uint16((int32(Cam.P.X) + winX) / TSzi)
-			worldCellY := uint16((int32(Cam.P.Y) + winY) / TSzi)
-			screenPos := sdl.Rect{winX, winY, offsetX, offsetY}
-
-			if worldCellX > uint16(s.CellsX) || worldCellY > uint16(s.CellsY) || worldCellX < 0 || worldCellY < 0 {
-				continue
-			}
-
-			gfx := World[worldCellX][worldCellY]
-
-			if offsetX != TSzi || offsetY != TSzi {
-				Source = &sdl.Rect{gfx.X + (TSzi - offsetX), gfx.Y + (TSzi - offsetY), offsetX, offsetY}
-			} else {
-				Source = gfx
-			}
-			if Source != nil && &screenPos != nil {
-			}
-			//println(s.TileSet, Source, &screenPos)
 			renderer.Copy(s.TileSet, Source, &screenPos)
 		}
 	}
@@ -1318,7 +1264,7 @@ func (s *Scene) _terrainRender(renderer *sdl.Renderer) {
 func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 	CullMap = []*Solid{}
 
-	for _, obj := range Interactive {
+	for _, obj := range s.Interactive {
 		if obj.Position == nil {
 			continue
 		}
@@ -1332,6 +1278,11 @@ func (s *Scene) _solidsRender(renderer *sdl.Renderer) {
 			} else {
 				src = obj.Source
 			}
+
+			if src == nil {
+				renderer.DrawRect(scrPos)
+			}
+
 			renderer.Copy(obj.Txt, src, scrPos)
 			CullMap = append(CullMap, obj)
 		}
@@ -1455,6 +1406,7 @@ func (s *Scene) render(renderer *sdl.Renderer) {
 	s._terrainRender2(renderer)
 	s._solidsRender(renderer)
 	s._monstersRender(renderer)
+
 	// Rendering the PC
 	if !(PC.Invinc > 0 && EventTick == 2) {
 		renderer.Copy(spritesheetTxt, PC.Solid.Anim.Action[PC.Solid.Anim.Pose], scrPos)
@@ -1646,7 +1598,7 @@ func PlaceDrop(item *Item, origin *sdl.Rect) {
 		},
 	}
 
-	Interactive = append(Interactive, instance.Solid)
+	scene.Interactive = append(scene.Interactive, instance.Solid)
 }
 
 func inScreen(r *sdl.Rect) bool {
@@ -1882,7 +1834,6 @@ func main() {
 	ttf.Init()
 	font, _ = ttf.OpenFont("assets/textures/PressStart2P.ttf", 12)
 
-	tilesetImg, _ := img.Load("assets/textures/ts1.png")
 	spritesheetImg, _ := img.Load("assets/textures/main_char.png")
 	powerupsImg, _ := img.Load("assets/textures/powerups_ts.png")
 	glowImg, _ := img.Load("assets/textures/glowing_ts.png")
@@ -1891,7 +1842,6 @@ func main() {
 	puffImg, _ := img.Load("assets/textures/puff.png")
 	hitImg, _ := img.Load("assets/textures/hit.png")
 	defer monstersImg.Free()
-	defer tilesetImg.Free()
 	defer spritesheetImg.Free()
 	defer powerupsImg.Free()
 	defer glowImg.Free()
@@ -1899,7 +1849,6 @@ func main() {
 	defer puffImg.Free()
 	defer hitImg.Free()
 
-	tilesetTxt, _ = renderer.CreateTextureFromSurface(tilesetImg)
 	spritesheetTxt, _ = renderer.CreateTextureFromSurface(spritesheetImg)
 	powerupsTxt, _ = renderer.CreateTextureFromSurface(powerupsImg)
 	glowTxt, _ = renderer.CreateTextureFromSurface(glowImg)
@@ -1907,7 +1856,6 @@ func main() {
 	transparencyTxt, _ = renderer.CreateTextureFromSurface(transparencyImg)
 	puffTxt, _ = renderer.CreateTextureFromSurface(puffImg)
 	hitTxt, _ = renderer.CreateTextureFromSurface(hitImg)
-	defer tilesetTxt.Destroy()
 	defer spritesheetTxt.Destroy()
 	defer powerupsTxt.Destroy()
 	defer glowTxt.Destroy()
@@ -1959,19 +1907,13 @@ func main() {
 	hit = VFX{Txtr: hitTxt, Strip: HIT_A, DefaultSpeed: 4}
 	impact = VFX{Txtr: hitTxt, Strip: HIT_B, DefaultSpeed: 3}
 
-	wld = tmx.LoadTMXFile("assets/world.tmx", renderer)
+	PC.Solid.CharPtr = &PC
+
+	renderer.SetDrawColor(0, 0, 255, 255)
+	scene = load_scene("world.tmx", renderer)
+	dbox.LoadText([]string{"Hello World!", "Again!"})
 
 	var running bool = true
-
-	for _, scn := range SCENES {
-		scn.TileSet = tilesetTxt
-	}
-
-	PC.Solid.CharPtr = &PC
-	renderer.SetDrawColor(0, 0, 255, 255)
-	scene = SCENES[0]
-	dbox.LoadText([]string{"Hello World!", "Again!"})
-	change_scene(scene, nil)
 	for running {
 		then := time.Now()
 
