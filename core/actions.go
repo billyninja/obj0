@@ -6,16 +6,6 @@ import (
 	"time"
 )
 
-func (ch *Char) CastSpell() {
-	var stCost float32 = 20
-	if stCost > ch.CurrentST {
-		return
-	}
-	ch.CurrentST -= stCost
-
-	ch.Solid.SetAnimation(MAN_CS_ANIM, ReleaseSpell)
-}
-
 func ReleaseSpell(caster *Solid, tgt *Solid) {
 	r := ProjectHitBox(Center(caster.Position), caster.Orientation, 48, &Vector2d{32, 32}, 0)
 	ttl := time.Now().Add(3 * time.Second)

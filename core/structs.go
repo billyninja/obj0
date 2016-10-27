@@ -56,9 +56,11 @@ type Solid struct {
 }
 
 type Char struct {
-	Solid     *Solid
-	ActionMap *ActionMap
-	Inventory []*ItemStack
+	Solid         *Solid
+	ActionMap     *ActionMap
+	Inventory     []*ItemStack
+	CurrentAction ActionInterface
+
 	//---
 	SpeedMod     float32
 	BaseSpeed    float32
@@ -100,7 +102,7 @@ type Animation struct {
 	Pose     uint8
 	PoseTick uint32
 	PlayMode uint8
-	After    Event
+	After    ActionInterface
 }
 
 type Movement struct {

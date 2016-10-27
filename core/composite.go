@@ -5,6 +5,9 @@ import (
 )
 
 var (
+	glowTxt *sdl.Texture = nil
+	Hit     *VFX         = nil
+	Impact  *VFX         = nil
 
 	// FACING ORIENTATION
 	F_LEFT  Vector2d = Vector2d{-1, 0}

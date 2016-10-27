@@ -158,7 +158,7 @@ func (cs *ControlState) Update(keydown []sdl.Keycode, keyup []sdl.Keycode) {
 			break
 		case KEY_C:
 			if PC.Solid.Anim.PlayMode != 1 {
-				PC.CastSpell()
+				PC.CurrentAction = templates.Fira.Cast(&PC, nil)
 			}
 			cs.ACTION_C = 0
 			break
@@ -320,7 +320,7 @@ func load_scene(mapname string, renderer *sdl.Renderer) *Scene {
 			scn.SolidFromTerrain(wld[x][y], x, y)
 		}
 	}
-	scn.populate(200)
+	//scn.populate(200)
 
 	return scn
 }
@@ -797,6 +797,11 @@ func (sp *SpawnPoint) Produce() {
 	Monsters = append(Monsters, mon)
 }
 
+func (scn *Scene) SpawnVFX(pos *sdl.Rect, o *core.Vector2d, vfx *core.VFX) {
+	vi := vfx.Spawn(pos, o)
+	Visual = append(Visual, vi)
+}
+
 func MonsterFactory(monsterTpl *templates.MonsterTemplate, lvlMod uint8, pos core.Vector2d) *core.Char {
 
 	variance := uint8(math.Floor(float64(rand.Float32() * monsterTpl.LvlVariance * 100)))
@@ -976,6 +981,9 @@ func main() {
 	templates.BootstrapMonsters(monstersTxt)
 	templates.BootstrapItems(powerupsTxt)
 	templates.BootstrapVfx(hitTxt, puffTxt)
+	templates.BootstrapSpells(glowTxt, core.LIFE_ORB_ANIM)
+
+	core.BootstrapResources(glowTxt, templates.Hit, templates.Impact)
 
 	MainCharSS := &core.SpriteSheet{spritesheetTxt, 0, 0, 32, 32}
 	MainCharActionMap := MainCharSS.BuildBasicActions(3, true)
@@ -988,14 +996,120 @@ func main() {
 
 	var running bool = true
 	for running {
+
 		then := time.Now()
 
 		running = catchEvents()
 		scene.update()
+		scene.ProcActions()
 		scene.render(renderer)
 
 		game_latency = (time.Since(then) / time.Microsecond)
-
 		sdl.Delay(33 - uint32(game_latency/1000))
+	}
+}
+
+func (scene *Scene) RunningActions() []core.ActionInterface {
+	queue := []core.ActionInterface{}
+	if PC.CurrentAction != nil {
+		queue = append(queue, PC.CurrentAction)
+	}
+
+	return queue
+}
+
+func (scn *Scene) ProcActions() {
+
+	for _, action := range scn.RunningActions() {
+
+		actor := action.GetActor()
+
+		switch action.GetState() {
+
+		case -1:
+			{
+				continue
+			}
+			break
+
+		case 0:
+			{
+				vfx := action.PreActionVFX()
+				if vfx != nil {
+					scn.SpawnVFX(actor.Position, actor.Orientation, vfx)
+				}
+
+				anim := action.PreActionAnim()
+				if anim != nil {
+					actor.SetAnimation(anim, action)
+				} else {
+					action.Step()
+				}
+
+				// important always should go to the intermediary step, at least!
+				action.Step()
+			}
+			break
+
+		case 1:
+			{
+				// TODO 1 - More explicit control like. action.IsWaiting()
+				// TODO 2 - Timing Control!
+				if !(actor.Anim != nil && actor.Anim.PlayMode == 1) {
+					action.Step()
+				}
+			}
+			break
+
+		case 2:
+			{
+				vfx := action.ActionVFX()
+				if vfx != nil {
+					scn.SpawnVFX(actor.Position, actor.Orientation, vfx)
+				}
+
+				anim := action.ActionAnim()
+				if anim != nil {
+					actor.SetAnimation(anim, action)
+				} else {
+					action.Step()
+				}
+
+				output := action.Perform(actor, nil)
+				scn.Interactive = append(scn.Interactive, output...)
+
+				// important always should go to the intermediary step, at least!
+				action.Step()
+			}
+			break
+
+		case 3:
+			{
+				// Same observations as `Case 1`
+				if !(actor.Anim != nil && actor.Anim.PlayMode == 1) {
+					action.Step()
+				}
+			}
+			break
+
+		case 4:
+			{
+				vfx := action.PostActionVFX()
+				if vfx != nil {
+					scn.SpawnVFX(actor.Position, actor.Orientation, vfx)
+				}
+
+				anim := action.PostActionAnim()
+				if anim != nil {
+					actor.SetAnimation(anim, action)
+				} else {
+					action.Step()
+				}
+
+				action.SetFinished()
+			}
+			break
+
+		}
 	}
 }

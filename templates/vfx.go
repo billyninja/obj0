@@ -6,15 +6,15 @@ import (
 )
 
 var (
-	Puff core.VFX = core.VFX{
+	Puff *core.VFX = &core.VFX{
 		Strip:        core.PUFF_A,
 		DefaultSpeed: 4,
 	}
-	Hit core.VFX = core.VFX{
+	Hit *core.VFX = &core.VFX{
 		Strip:        core.HIT_A,
 		DefaultSpeed: 4,
 	}
-	Impact core.VFX = core.VFX{
+	Impact *core.VFX = &core.VFX{
 		Strip:        core.HIT_B,
 		DefaultSpeed: 3,
 	}

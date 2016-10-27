@@ -109,30 +109,42 @@ func (ss *SpriteSheet) GetPose(o Vector2d, p uint8) *sdl.Rect {
 }
 
 // SOLID-ANIMATION RELATED
-
-func (s *Solid) SetAnimation(an *Animation, evt Event) {
+func (s *Solid) SetAnimation(an *Animation, action ActionInterface) {
 	var nA *Animation = &Animation{}
 	*nA = *an
-
 	s.Anim = nA
 	s.Anim.Pose = 0
 	s.Anim.PoseTick = 16
-	s.Anim.After = evt
+	s.Anim.After = action
 }
 
 func (s *Solid) PlayAnimation() {
 
+	println("here 0!", s.Anim.PoseTick)
 	s.Anim.PoseTick -= 1
 
 	if s.Anim.PoseTick <= 0 {
+
+		println("here 1!", s.Anim.PoseTick)
+
 		s.Anim.PoseTick = 12
+
 		if s.CharPtr != nil {
+
+			println(">>>>>>>>here 1.2!")
+			println(">>>>>>>>here 1.2!")
+
 			anim := s.CharPtr.CurrentFacing()
+
 			prvPose := s.Anim.Pose
 			s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
+			println("here 2!", anim, s.Anim.Pose, prvPose, s.Anim.PlayMode)
+
 			if anim != nil && s.Anim.Pose <= prvPose && s.Anim.PlayMode == 1 {
+				println("here 3!")
 				if s.Anim.After != nil {
-					s.Anim.After(s, nil)
+					println("here 4!")
+					s.Anim.After.Step()
 				}
 				s.SetAnimation(anim, nil)
 			}
@@ -204,7 +216,6 @@ func getNextPose(action [8]*sdl.Rect, currPose uint8) uint8 {
 }
 
 // TEXT RELATED
-
 func (t *TextEl) Bake(renderer *sdl.Renderer, limit int) (*sdl.Texture, int32, int32) {
 	if t.Content == t.BakedContent {
 		return t.Txtr, t.TW, t.TH
@@ -219,7 +230,6 @@ func (t *TextEl) Bake(renderer *sdl.Renderer, limit int) (*sdl.Texture, int32, i
 }
 
 // VFX RELATED
-
 func PopText(font *ttf.Font, pos *sdl.Rect, content string, color sdl.Color) *VFXInst {
 
 	tEl := &TextEl{
@@ -285,4 +295,10 @@ func (v *VFX) Spawn(Position *sdl.Rect, flip *Vector2d) *VFXInst {
 	}
 
 	return i
+}
+
+func BootstrapResources(spellsTxt *sdl.Texture, vfSlash, vfImpact *VFX) {
+	glowTxt = spellsTxt
+	Hit = vfSlash
+	Impact = vfImpact
 }
