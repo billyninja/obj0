@@ -58,9 +58,9 @@ func InitScene(mapname string, renderer *sdl.Renderer, pc *SceneEntity, winWidth
 	return scn
 }
 
-func (s *Scene) SolidFromTerrain(terr *tmx.Terrain, cellX int32, cellY int32) {
+func (scn *Scene) SolidFromTerrain(terr *tmx.Terrain, cellX int32, cellY int32) {
 
-	pos := &sdl.Rect{cellY * s.TileWidth, cellX * s.TileWidth, s.TileWidth, s.TileWidth}
+	pos := &sdl.Rect{cellY * scn.TileWidth, cellX * scn.TileWidth, scn.TileWidth, scn.TileWidth}
 
 	for _, tt := range terr.TerrainTypes {
 
@@ -93,17 +93,17 @@ func (s *Scene) SolidFromTerrain(terr *tmx.Terrain, cellX int32, cellY int32) {
 		}
 
 		if sE != nil {
-			s.Interactive = append(s.Interactive, sE)
+			scn.Interactive = append(scn.Interactive, sE)
 		}
 	}
 }
 
-func (s *Scene) Populate(population int, pc *Char) {
+func (scn *Scene) Populate(population int, pc *Char) {
 
 	for i := 0; i < population; i++ {
-		cX, cY := rand.Int31n(s.CellsX), rand.Int31n(s.CellsY)
+		cX, cY := rand.Int31n(scn.CellsX), rand.Int31n(scn.CellsY)
 
-		absolute_pos := &sdl.Rect{cX * s.TileWidth, cY * s.TileWidth, 64, 64}
+		absolute_pos := &sdl.Rect{cX * scn.TileWidth, cY * scn.TileWidth, 64, 64}
 
 		switch rand.Int31n(9) {
 		case 3:
@@ -116,7 +116,7 @@ func (s *Scene) Populate(population int, pc *Char) {
 					Collision: 0,
 				},
 				Handlers: &SEventHandlers{
-					OnCollEvent: func(src *SceneEntity, sbj *SceneEntity, scn *Scene) {
+					OnCollEvent: func(src, sbj *SceneEntity, scn *Scene) {
 						char := src.Char
 
 						src.Solid.SetAnimation(MAN_PU_ANIM)
@@ -130,12 +130,12 @@ func (s *Scene) Populate(population int, pc *Char) {
 				},
 			}
 
-			s.Interactive = append(s.Interactive, se)
+			scn.Interactive = append(scn.Interactive, se)
 			break
 		case 4:
 
 			absolute_pos.W, absolute_pos.H = 128, 128
-			for _, sp2 := range s.Spawners {
+			for _, sp2 := range scn.Spawners {
 				if core.CheckCol(absolute_pos, sp2.Position) {
 					return
 				}
@@ -147,7 +147,7 @@ func (s *Scene) Populate(population int, pc *Char) {
 				Frequency: uint16(rand.Int31n(5)),
 			}
 
-			s.Spawners = append(s.Spawners, spw)
+			scn.Spawners = append(scn.Spawners, spw)
 			break
 		case 5:
 			fnpc := SceneEntity{
@@ -179,17 +179,17 @@ func (s *Scene) Populate(population int, pc *Char) {
 			fnpc.Solid.Anim = MAN_PB_ANIM
 			fnpc.Solid.CharPtr = fnpc.Char
 
-			s.Monsters = append(s.Monsters, &fnpc)
+			scn.Monsters = append(scn.Monsters, &fnpc)
 			break
 		}
 
 	}
 }
 
-func (s *Scene) SpawnMonster(spw *SpawnPoint, pc *SceneEntity) {
+func (scn *Scene) SpawnMonster(spw *SpawnPoint, pc *SceneEntity) {
 	mon, vi := spw.Produce(pc)
-	s.Monsters = append(s.Monsters, mon)
-	s.Visual = append(s.Visual, vi)
+	scn.Monsters = append(scn.Monsters, mon)
+	scn.Visual = append(scn.Visual, vi)
 }
 
 func (scn *Scene) ResolveCol(ObjA *SceneEntity, ObjB *SceneEntity) bool {
@@ -301,81 +301,37 @@ func (scn *Scene) PeformPattern(se *SceneEntity) {
 	}
 }
 
-func (s *Scene) SpawnVFX(pos *sdl.Rect, o *core.Vector2d, vfx *VFX) {
+func (scn *Scene) SpawnVFX(pos *sdl.Rect, o *core.Vector2d, vfx *VFX) {
 	vi := vfx.Spawn(pos, o)
-	s.Visual = append(s.Visual, vi)
+	scn.Visual = append(scn.Visual, vi)
+}
+
+func (scn *Scene) PlaceDrop(item *Item, origin *sdl.Rect) {
+	instance := &SceneEntity{
+		ItemPtr: item,
+		Solid: &Solid{
+			Txt:    item.Txtr,
+			Source: item.Source,
+			Position: &sdl.Rect{
+				origin.X,
+				origin.Y,
+				item.Source.W,
+				item.Source.H,
+			},
+		},
+		Handlers: &SEventHandlers{
+			OnPickUp: Pickup,
+		},
+	}
+
+	scn.Interactive = append(scn.Interactive, instance)
 }
 
 func (sp *SpawnPoint) Produce(pc *SceneEntity) (*SceneEntity, *VFXInst) {
 	px := float32(rand.Int31n((sp.Position.X+sp.Position.W)-sp.Position.X) + sp.Position.X)
 	py := float32(rand.Int31n((sp.Position.Y+sp.Position.H)-sp.Position.Y) + sp.Position.Y)
-
-	mon := MonsterFactory(
-		&OrcTPL,
-		sp.LvlMod,
-		core.Vector2d{px, py},
-		pc.Solid,
-	)
+	mon := OrcTPL.MonsterFactory(sp.LvlMod, core.Vector2d{px, py}, pc.Solid)
 	vi := Puff.Spawn(mon.Solid.Position, mon.Solid.Orientation)
 
 	return mon, vi
-}
-
-func MonsterFactory(tpl *MonsterTemplate, lvlMod uint8, pos core.Vector2d, target *Solid) *SceneEntity {
-
-	variance := rand.Float32() * tpl.LvlVariance * 100.0
-	lvl := uint8((tpl.Lvl + lvlMod) + uint8(variance))
-	hp := tpl.HP + float32(lvl*2)
-	sizeMod := int32(float32(lvl-tpl.Lvl) * tpl.ScalingFactor)
-	W, H := (tpl.Size + sizeMod), (tpl.Size + sizeMod)
-
-	var DropItem *Item
-	var sumP float32
-	R := rand.Float32()
-	for _, l := range tpl.Loot {
-		sumP += l.Perc
-		if R < sumP {
-			DropItem = l.Item
-			break
-		}
-	}
-
-	sol := &Solid{
-		Position:    &sdl.Rect{int32(pos.X), int32(pos.Y), W, H},
-		Velocity:    &core.Vector2d{0, 0},
-		Orientation: &core.Vector2d{0, 0},
-		Txt:         tpl.Txtr,
-		Speed:       1,
-		Collision:   2,
-		CPattern:    0,
-		LoS:         tpl.LoS,
-		MPattern: []Movement{
-			Movement{F_DOWN, 50},
-			Movement{F_UP, 90},
-			Movement{F_RIGHT, 10},
-			Movement{F_LEFT, 10},
-		},
-		Chase: target,
-	}
-
-	mon := &Char{
-		Lvl:         lvl,
-		ActionMap:   tpl.ActionMap,
-		AtkSpeed:    tpl.AtkSpeed,
-		AtkCoolDown: tpl.AtkCoolDown,
-		CurrentHP:   hp,
-		MaxHP:       hp,
-		Drop:        DropItem,
-	}
-
-	sol.SetAnimation(tpl.ActionMap.DOWN)
-	sol.CharPtr = mon
-
-	return &SceneEntity{
-		Solid: sol,
-		Char:  mon,
-		Handlers: &SEventHandlers{
-			OnCollDmg: 12,
-		},
-	}
 }

@@ -176,7 +176,7 @@ func debug_info(renderer *sdl.Renderer) {
 		currScene.EventTick,
 		currScene.AiTick)
 
-	dbg_TextEl := game.TextEl{
+	dbg_TextEl := core.TextEl{
 		Font:    assets.Fonts.Default,
 		Content: dbg_content,
 		Color:   sdl.Color{255, 255, 255, 255},

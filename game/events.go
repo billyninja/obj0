@@ -2,16 +2,15 @@ package game
 
 import (
 	"github.com/billyninja/obj0/core"
-	"github.com/veandco/go-sdl2/sdl"
 )
 
-func PlayDialog(listener *SceneEntity, speaker *SceneEntity, scn *Scene) {
+func PlayDialog(listener, speaker *SceneEntity, scn *Scene) {
 	if len(speaker.Handlers.DialogScript) > 0 {
 		scn.DBox.LoadText(speaker.Handlers.DialogScript)
 	}
 }
 
-func AddToInv(picker *SceneEntity, item *SceneEntity, scn *Scene) {
+func AddToInv(picker, item *SceneEntity, scn *Scene) {
 	char := picker.Char
 	if picker != nil && char != nil && item != nil && item.ItemPtr != nil {
 		for _, iStack := range char.Inventory {
@@ -22,6 +21,11 @@ func AddToInv(picker *SceneEntity, item *SceneEntity, scn *Scene) {
 		}
 		char.Inventory = append(char.Inventory, &ItemStack{item.ItemPtr, 1})
 	}
+}
+
+func Pickup(picker, item *SceneEntity, scn *Scene) {
+	picker.Solid.SetAnimation(MAN_PU_ANIM)
+	AddToInv(picker, item, scn)
 }
 
 func MeleeAttack(source, tgt *SceneEntity, scn *Scene) {
@@ -36,27 +40,10 @@ func MeleeAttack(source, tgt *SceneEntity, scn *Scene) {
 	}
 }
 
-func BashDoor(actor *Solid, door *Solid) {
-	//currScene = load_scene(door.Handlers.DoorTo, nil)
-}
-
-func (scn *Scene) PlaceDrop(item *Item, origin *sdl.Rect) {
-	instance := &SceneEntity{
-		ItemPtr: item,
-		Solid: &Solid{
-			Txt:    item.Txtr,
-			Source: item.Source,
-			Position: &sdl.Rect{
-				origin.X,
-				origin.Y,
-				item.Source.W,
-				item.Source.H,
-			},
-		},
-		Handlers: &SEventHandlers{
-			OnPickUp: AddToInv,
-		},
+func OpenDoor(actor, door *SceneEntity, scn *Scene) {
+	if door.Handlers != nil && door.Handlers.DoorTo != "" {
+		println("NOT IMPLEMENTED! too much main dependency right now.", door.Handlers.DoorTo)
+	} else {
+		println("no DoorTo")
 	}
-
-	scn.Interactive = append(scn.Interactive, instance)
 }

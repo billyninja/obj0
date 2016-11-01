@@ -202,29 +202,10 @@ func getNextPose(action [8]*sdl.Rect, currPose uint8) uint8 {
 	}
 }
 
-// TEXT RELATED
-func (t *TextEl) Bake(renderer *sdl.Renderer, limit int) (*sdl.Texture, int32, int32) {
-
-	if t.Font == nil {
-		return nil, 0, 0
-	}
-
-	if t.Content == t.BakedContent {
-		return t.Txtr, t.TW, t.TH
-	}
-
-	surface, _ := t.Font.RenderUTF8_Blended_Wrapped(t.Content, t.Color, limit)
-	defer surface.Free()
-	t.Txtr, _ = renderer.CreateTextureFromSurface(surface)
-	t.TW, t.TH = surface.W, surface.H
-
-	return t.Txtr, t.TW, t.TH
-}
-
 // VFX RELATED
 func PopText(font *ttf.Font, pos *sdl.Rect, content string, color sdl.Color) *VFXInst {
 
-	tEl := &TextEl{
+	tEl := &core.TextEl{
 		Font:    font,
 		Content: content,
 		Color:   color,

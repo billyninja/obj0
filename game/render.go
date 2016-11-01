@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"github.com/billyninja/obj0/assets"
+	"github.com/billyninja/obj0/core"
 	"github.com/veandco/go-sdl2/sdl"
 	"time"
 )
@@ -136,7 +137,7 @@ func (s *Scene) GUIRender(pc *Char, renderer *sdl.Renderer) {
 	renderer.FillRect(&sdl.Rect{10, 38, int32(CalcPerc(float32(pc.CurrentXP), float32(pc.NextLvlXP))), 4})
 
 	for i, stack := range pc.Inventory {
-		counter := TextEl{
+		counter := core.TextEl{
 			Content: fmt.Sprintf("%d", stack.Qty),
 			Font:    assets.Fonts.Default,
 			Color:   CL_WHITE,
@@ -158,7 +159,7 @@ func (s *Scene) GUIRender(pc *Char, renderer *sdl.Renderer) {
 		renderer.DrawRect(scrPos)
 	}
 
-	lvl_TextEl := TextEl{
+	lvl_TextEl := core.TextEl{
 		Font:    assets.Fonts.Default,
 		Content: fmt.Sprintf("Lvl. %d", pc.Lvl),
 		Color:   CL_WHITE,

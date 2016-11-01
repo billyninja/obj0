@@ -6,14 +6,6 @@ import (
 	"time"
 )
 
-func onColHdk(tgt *Solid, hdk *Solid) {
-	if tgt.CharPtr != nil {
-		tgt.CharPtr.DepletHP(15)
-	}
-
-	hdk.Destroy()
-}
-
 func (ch *Char) DepletHP(dmg float32) {
 	if ch.Invinc > 0 {
 		return

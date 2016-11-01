@@ -2,7 +2,9 @@ package game
 
 import (
 	"github.com/billyninja/obj0/assets"
+	"github.com/billyninja/obj0/core"
 	"github.com/veandco/go-sdl2/sdl"
+	"math/rand"
 )
 
 type MonsterTemplate struct {
@@ -154,6 +156,65 @@ var (
 		AtkSpeed:      1,
 	}
 )
+
+func (tpl *MonsterTemplate) MonsterFactory(lvlMod uint8, pos core.Vector2d, target *Solid) *SceneEntity {
+
+	variance := rand.Float32() * tpl.LvlVariance * 100.0
+	lvl := uint8((tpl.Lvl + lvlMod) + uint8(variance))
+	hp := tpl.HP + float32(lvl*2)
+	sizeMod := int32(float32(lvl-tpl.Lvl) * tpl.ScalingFactor)
+	W, H := (tpl.Size + sizeMod), (tpl.Size + sizeMod)
+
+	var DropItem *Item
+	var sumP float32
+	R := rand.Float32()
+	for _, l := range tpl.Loot {
+		sumP += l.Perc
+		if R < sumP {
+			DropItem = l.Item
+			break
+		}
+	}
+
+	sol := &Solid{
+		Position:    &sdl.Rect{int32(pos.X), int32(pos.Y), W, H},
+		Velocity:    &core.Vector2d{0, 0},
+		Orientation: &core.Vector2d{0, 0},
+		Txt:         tpl.Txtr,
+		Speed:       1,
+		Collision:   2,
+		CPattern:    0,
+		LoS:         tpl.LoS,
+		MPattern: []Movement{
+			Movement{F_DOWN, 50},
+			Movement{F_UP, 90},
+			Movement{F_RIGHT, 10},
+			Movement{F_LEFT, 10},
+		},
+		Chase: target,
+	}
+
+	mon := &Char{
+		Lvl:         lvl,
+		ActionMap:   tpl.ActionMap,
+		AtkSpeed:    tpl.AtkSpeed,
+		AtkCoolDown: tpl.AtkCoolDown,
+		CurrentHP:   hp,
+		MaxHP:       hp,
+		Drop:        DropItem,
+	}
+
+	sol.SetAnimation(tpl.ActionMap.DOWN)
+	sol.CharPtr = mon
+
+	return &SceneEntity{
+		Solid: sol,
+		Char:  mon,
+		Handlers: &SEventHandlers{
+			OnCollDmg: 12,
+		},
+	}
+}
 
 func BootstrapItems() {
 	GreenBlob.Txtr = assets.Textures.GUI.PowerUps

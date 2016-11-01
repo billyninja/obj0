@@ -4,7 +4,6 @@ import (
 	"github.com/billyninja/obj0/core"
 	"github.com/billyninja/obj0/tmx"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/sdl_ttf"
 )
 
 var (
@@ -163,17 +162,7 @@ type VFXInst struct {
 	CurrTick uint8
 	Loop     uint8
 	Flip     core.Vector2d
-	Text     *TextEl
-}
-
-type TextEl struct {
-	Font         *ttf.Font
-	Color        sdl.Color
-	Content      string
-	BakedContent string
-	Txtr         *sdl.Texture
-	TW           int32
-	TH           int32
+	Text     *core.TextEl
 }
 
 func (s *Solid) Destroy() {
