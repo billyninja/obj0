@@ -1,26 +1,27 @@
-package core
+package game
 
 import (
+	"github.com/billyninja/obj0/assets"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+type MonsterTemplate struct {
+	Txtr          *sdl.Texture
+	ActionMap     *ActionMap
+	SpriteSheet   *SpriteSheet
+	Lvl           uint8
+	HP            float32
+	Size          int32
+	LvlVariance   float32
+	ScalingFactor float32
+	AtkCoolDown   float32
+	AtkSpeed      float32
+	LoS           int32
+	Loot          [8]Loot
+}
+
 var (
-	glowTxt *sdl.Texture = nil
-	Hit     *VFX         = nil
-	Impact  *VFX         = nil
-
-	// FACING ORIENTATION
-	F_LEFT  Vector2d = Vector2d{-1, 0}
-	F_RIGHT          = Vector2d{1, 0}
-	F_UP             = Vector2d{0, -1}
-	F_DOWN           = Vector2d{0, 1}
-	F_DL             = Vector2d{-1, 1}
-	F_DR             = Vector2d{1, 1}
-	F_UL             = Vector2d{-1, -1}
-	F_UR             = Vector2d{1, -1}
-
-	CL_WHITE sdl.Color = sdl.Color{255, 255, 255, 255}
-	SHADOW             = &sdl.Rect{320, 224, TSzi, TSzi}
+	SHADOW = &sdl.Rect{320, 224, TSzi, TSzi}
 
 	MAN_PB_S1 *sdl.Rect = &sdl.Rect{96, 160, TSzi, TSzi}
 	MAN_PB_S2 *sdl.Rect = &sdl.Rect{128, 160, TSzi, TSzi}
@@ -80,4 +81,110 @@ var (
 	MAN_CS_ANIM   = &Animation{Action: MAN_CAST, PoseTick: 18, PlayMode: 1}
 	MAN_PU_ANIM   = &Animation{Action: MAN_PICK_UP, PoseTick: 18, PlayMode: 1}
 	MAN_ATK1_ANIM = &Animation{Action: MAN_AT_1, PoseTick: 4, PlayMode: 1}
+
+	// ITEMS
+	GreenBlob *Item = &Item{
+		Name:        "Green Blob",
+		Description: "A chunck of slime.",
+		Source:      &sdl.Rect{0, 0, 24, 24},
+		Weight:      2,
+		BaseValue:   10,
+		Txtr:        assets.Textures.GUI.PowerUps,
+	}
+
+	CrystalizedJelly *Item = &Item{
+		Name:        "Crystalized Jelly",
+		Description: "Some believe that the Slime's soul live within it",
+		Source:      &sdl.Rect{24, 0, 24, 24},
+		Weight:      2,
+		BaseValue:   10,
+		Txtr:        assets.Textures.GUI.PowerUps,
+	}
+
+	// VFX
+	Puff *VFX = &VFX{
+		Strip:        PUFF_A,
+		DefaultSpeed: 4,
+	}
+	Hit *VFX = &VFX{
+		Strip:        HIT_A,
+		DefaultSpeed: 4,
+	}
+	Impact *VFX = &VFX{
+		Strip:        HIT_B,
+		DefaultSpeed: 3,
+	}
+
+	// Monsters
+
+	SlimeTPL MonsterTemplate = MonsterTemplate{
+		Lvl:           1,
+		HP:            25,
+		LoS:           90,
+		Size:          32,
+		LvlVariance:   0.3,
+		ScalingFactor: 0.6,
+		Loot: [8]Loot{
+			{CrystalizedJelly, 0.5},
+			{GreenBlob, 0.5},
+		},
+	}
+
+	BatTPL = MonsterTemplate{
+		SpriteSheet:   &SpriteSheet{assets.Textures.Sprites.Monsters, 0, 0, 48, 48},
+		Loot:          [8]Loot{{CrystalizedJelly, 0.5}, {GreenBlob, 0.5}},
+		Lvl:           1,
+		HP:            25,
+		LoS:           90,
+		Size:          32,
+		LvlVariance:   0.3,
+		ScalingFactor: 0.6,
+	}
+
+	OrcTPL = MonsterTemplate{
+		SpriteSheet:   &SpriteSheet{assets.Textures.Sprites.Monsters, 288, 0, 48, 48},
+		Loot:          [8]Loot{{CrystalizedJelly, 0.5}, {GreenBlob, 0.5}},
+		Lvl:           5,
+		HP:            70,
+		LoS:           100,
+		Size:          64,
+		LvlVariance:   0.5,
+		ScalingFactor: 0.1,
+		AtkCoolDown:   60.0,
+		AtkSpeed:      1,
+	}
 )
+
+func BootstrapItems() {
+	GreenBlob.Txtr = assets.Textures.GUI.PowerUps
+	CrystalizedJelly.Txtr = assets.Textures.GUI.PowerUps
+}
+
+func BootstrapVFX() {
+	GreenBlob.Txtr = assets.Textures.GUI.PowerUps
+	CrystalizedJelly.Txtr = assets.Textures.GUI.PowerUps
+
+	Puff.Txtr = assets.Textures.Sprites.Puff
+	Hit.Txtr = assets.Textures.Sprites.Hit
+	Impact.Txtr = assets.Textures.Sprites.Hit
+}
+
+func BootstrapMonsters() {
+	BatTPL.Txtr = assets.Textures.Sprites.Monsters
+	OrcTPL.Txtr = assets.Textures.Sprites.Monsters
+	BatTPL.ActionMap = BatTPL.SpriteSheet.BuildBasicActions(3, false)
+	OrcTPL.ActionMap = OrcTPL.SpriteSheet.BuildBasicActions(3, false)
+}
+
+func BootstrapPC(PC *SceneEntity) {
+	MainCharSS := &SpriteSheet{
+		Txtr:  assets.Textures.Sprites.MainChar,
+		StX:   0,
+		StY:   0,
+		StepW: 32,
+		StepH: 32,
+	}
+	MainCharActionMap := MainCharSS.BuildBasicActions(3, true)
+	PC.Char.ActionMap = MainCharActionMap
+	PC.Solid.CharPtr = PC.Char
+}

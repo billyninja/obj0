@@ -1,6 +1,7 @@
-package core
+package game
 
 import (
+	"github.com/billyninja/obj0/core"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/sdl_ttf"
 	"time"
@@ -11,11 +12,10 @@ const (
 	TSzi int32   = int32(TSz)
 )
 
-// SPRITESHEET RELATED
 func (ss *SpriteSheet) BuildBasicActions(actLength uint8, hasDiagonals bool) *ActionMap {
-	O := []Vector2d{F_UP, F_DOWN, F_LEFT, F_RIGHT}
+	O := []core.Vector2d{F_UP, F_DOWN, F_LEFT, F_RIGHT}
 	if hasDiagonals {
-		O = append(O, []Vector2d{F_DL, F_DR, F_UL, F_UR}...)
+		O = append(O, []core.Vector2d{F_DL, F_DR, F_UL, F_UR}...)
 	}
 	var AM = &ActionMap{}
 	for _, o := range O {
@@ -55,7 +55,7 @@ func (ss *SpriteSheet) BuildBasicActions(actLength uint8, hasDiagonals bool) *Ac
 	return AM
 }
 
-func (ss *SpriteSheet) GetPose(o Vector2d, p uint8) *sdl.Rect {
+func (ss *SpriteSheet) GetPose(o core.Vector2d, p uint8) *sdl.Rect {
 
 	var (
 		poseY int32 = 0
@@ -109,44 +109,31 @@ func (ss *SpriteSheet) GetPose(o Vector2d, p uint8) *sdl.Rect {
 }
 
 // SOLID-ANIMATION RELATED
-func (s *Solid) SetAnimation(an *Animation, action ActionInterface) {
+func (s *Solid) SetAnimation(an *Animation) {
 	var nA *Animation = &Animation{}
 	*nA = *an
 	s.Anim = nA
 	s.Anim.Pose = 0
 	s.Anim.PoseTick = 16
-	s.Anim.After = action
 }
 
 func (s *Solid) PlayAnimation() {
 
-	println("here 0!", s.Anim.PoseTick)
 	s.Anim.PoseTick -= 1
 
 	if s.Anim.PoseTick <= 0 {
-
-		println("here 1!", s.Anim.PoseTick)
 
 		s.Anim.PoseTick = 12
 
 		if s.CharPtr != nil {
 
-			println(">>>>>>>>here 1.2!")
-			println(">>>>>>>>here 1.2!")
-
-			anim := s.CharPtr.CurrentFacing()
+			anim := s.CharPtr.GetFacingAnim(s.Orientation)
 
 			prvPose := s.Anim.Pose
 			s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
-			println("here 2!", anim, s.Anim.Pose, prvPose, s.Anim.PlayMode)
 
 			if anim != nil && s.Anim.Pose <= prvPose && s.Anim.PlayMode == 1 {
-				println("here 3!")
-				if s.Anim.After != nil {
-					println("here 4!")
-					s.Anim.After.Step()
-				}
-				s.SetAnimation(anim, nil)
+				s.SetAnimation(anim)
 			}
 		} else {
 			s.Anim.Pose = getNextPose(s.Anim.Action, s.Anim.Pose)
@@ -154,25 +141,25 @@ func (s *Solid) PlayAnimation() {
 	}
 }
 
-func (ch *Char) CurrentFacing() *Animation {
+func (ch *Char) GetFacingAnim(o *core.Vector2d) *Animation {
 
-	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == 1 {
+	if o.X == 0 && o.Y == 1 {
 		return ch.ActionMap.DOWN
 	}
 
-	if ch.Solid.Orientation.X == 0 && ch.Solid.Orientation.Y == -1 {
+	if o.X == 0 && o.Y == -1 {
 		return ch.ActionMap.UP
 	}
 
-	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 0 {
+	if o.X == -1 && o.Y == 0 {
 		return ch.ActionMap.LEFT
 	}
 
-	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 0 {
+	if o.X == 1 && o.Y == 0 {
 		return ch.ActionMap.RIGHT
 	}
 
-	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == 1 {
+	if o.X == 1 && o.Y == 1 {
 		if ch.ActionMap.DR != nil {
 			return ch.ActionMap.DR
 		} else {
@@ -180,7 +167,7 @@ func (ch *Char) CurrentFacing() *Animation {
 		}
 	}
 
-	if ch.Solid.Orientation.X == 1 && ch.Solid.Orientation.Y == -1 {
+	if o.X == 1 && o.Y == -1 {
 		if ch.ActionMap.UR != nil {
 			return ch.ActionMap.UR
 		} else {
@@ -188,7 +175,7 @@ func (ch *Char) CurrentFacing() *Animation {
 		}
 	}
 
-	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == 1 {
+	if o.X == -1 && o.Y == 1 {
 		if ch.ActionMap.DL != nil {
 			return ch.ActionMap.DL
 		} else {
@@ -196,7 +183,7 @@ func (ch *Char) CurrentFacing() *Animation {
 		}
 	}
 
-	if ch.Solid.Orientation.X == -1 && ch.Solid.Orientation.Y == -1 {
+	if o.X == -1 && o.Y == -1 {
 		if ch.ActionMap.UL != nil {
 			return ch.ActionMap.UL
 		} else {
@@ -217,6 +204,11 @@ func getNextPose(action [8]*sdl.Rect, currPose uint8) uint8 {
 
 // TEXT RELATED
 func (t *TextEl) Bake(renderer *sdl.Renderer, limit int) (*sdl.Texture, int32, int32) {
+
+	if t.Font == nil {
+		return nil, 0, 0
+	}
+
 	if t.Content == t.BakedContent {
 		return t.Txtr, t.TW, t.TH
 	}
@@ -279,7 +271,7 @@ func (vi *VFXInst) CurrentFrame() *sdl.Rect {
 	return vi.Vfx.Strip[vi.Pose]
 }
 
-func (v *VFX) Spawn(Position *sdl.Rect, flip *Vector2d) *VFXInst {
+func (v *VFX) Spawn(Position *sdl.Rect, flip *core.Vector2d) *VFXInst {
 	var ttl int64
 
 	i := &VFXInst{
@@ -295,10 +287,4 @@ func (v *VFX) Spawn(Position *sdl.Rect, flip *Vector2d) *VFXInst {
 	}
 
 	return i
-}
-
-func BootstrapResources(spellsTxt *sdl.Texture, vfSlash, vfImpact *VFX) {
-	glowTxt = spellsTxt
-	Hit = vfSlash
-	Impact = vfImpact
 }

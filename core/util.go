@@ -30,7 +30,10 @@ func Copysign32(x, y float32) float32 {
 }
 
 func Center(r *sdl.Rect) *Vector2d {
-	return &Vector2d{float32(r.X + (r.W / 2)), float32(r.Y + (r.H / 2))}
+	return &Vector2d{
+		float32(r.X + (r.W / 2)),
+		float32(r.Y + (r.H / 2)),
+	}
 }
 
 func ProjectHitBox(origin *Vector2d, orientation *Vector2d, length float32, distance *Vector2d, comp float32) *sdl.Rect {
@@ -38,10 +41,18 @@ func ProjectHitBox(origin *Vector2d, orientation *Vector2d, length float32, dist
 		distance = &Vector2d{0, 0}
 	}
 
+	if orientation.X != 0 && orientation.Y != 0 {
+		orientation.X *= 0.5
+		orientation.Y *= 0.5
+	}
+
 	lx := length + (length * Abs32(orientation.Y) * comp)
 	ly := length + (length * Abs32(orientation.X) * comp)
-	px := origin.X - (lx / 2) + (orientation.X * distance.X) + (orientation.X * lx)
-	py := origin.Y - (ly / 2) + (orientation.Y * distance.Y) + (orientation.Y * ly)
+
+	partX := (lx / 2) + (-orientation.X * distance.X) + (-orientation.X * lx)
+	partY := (ly / 2) + (-orientation.Y * distance.Y) + (-orientation.Y * ly)
+	px := origin.X - partX
+	py := origin.Y - partY
 
 	return &sdl.Rect{int32(px), int32(py), int32(lx), int32(ly)}
 }
@@ -56,4 +67,8 @@ func CheckCol(r1 *sdl.Rect, r2 *sdl.Rect) bool {
 func FeetRect(pos *sdl.Rect) *sdl.Rect {
 	third := pos.H / 3
 	return &sdl.Rect{pos.X, pos.Y + third, pos.W, pos.H - third}
+}
+
+func IsMoving(vel *Vector2d) bool {
+	return (vel.X != 0 || vel.Y != 0)
 }
