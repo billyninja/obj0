@@ -23,12 +23,12 @@ func (ch *Char) ApplyInvinc() {
 	}
 }
 
-func (s *Solid) LoSCheck(tgt *Solid) bool {
+func (sol *Solid) LoSCheck(tgt *Solid) bool {
 	LoS := &sdl.Rect{
-		s.Position.X - s.LoS,
-		s.Position.Y - s.LoS,
-		s.Position.W + (s.LoS * 2),
-		s.Position.H + (s.LoS * 2),
+		sol.Position.X - sol.LoS,
+		sol.Position.Y - sol.LoS,
+		sol.Position.W + (sol.LoS * 2),
+		sol.Position.H + (sol.LoS * 2),
 	}
 
 	if !core.CheckCol(tgt.Position, LoS) {
@@ -37,15 +37,15 @@ func (s *Solid) LoSCheck(tgt *Solid) bool {
 	return true
 }
 
-func (s *Solid) ApplyMovement() *sdl.Rect {
-	speed := s.Speed
+func (sol *Solid) ApplyMovement() *sdl.Rect {
+	speed := sol.Speed
 
-	if s.Velocity.X == 0 && s.Velocity.Y == 0 {
-		return s.Position
+	if sol.Velocity.X == 0 && sol.Velocity.Y == 0 {
+		return sol.Position
 	}
 
 	// Decreasing speed for diagonal movement
-	if s.Velocity.X != 0 && s.Velocity.Y != 0 {
+	if sol.Velocity.X != 0 && sol.Velocity.Y != 0 {
 		speed -= 0.5
 		if speed < 1 {
 			speed = 1
@@ -53,23 +53,23 @@ func (s *Solid) ApplyMovement() *sdl.Rect {
 	}
 
 	return &sdl.Rect{
-		(s.Position.X + int32(s.Velocity.X*speed)),
-		(s.Position.Y + int32(s.Velocity.Y*speed)),
-		s.Position.W,
-		s.Position.H,
+		(sol.Position.X + int32(sol.Velocity.X*speed)),
+		(sol.Position.Y + int32(sol.Velocity.Y*speed)),
+		sol.Position.W,
+		sol.Position.H,
 	}
 }
 
-func (s *Solid) UpdateVelocity(dpad *core.Vector2d) {
+func (sol *Solid) UpdateVelocity(dpad *core.Vector2d) {
 
 	nv := &core.Vector2d{}
-	*nv = *s.Velocity
+	*nv = *sol.Velocity
 
-	if dpad.X != 0 || s.Velocity.X != 0 {
+	if dpad.X != 0 || sol.Velocity.X != 0 {
 		if dpad.X != 0 {
 			nv.X = core.ThrotleValue(nv.X+dpad.X, 2)
 		} else {
-			nv.X = (core.Abs32(nv.X) - 1) * s.Orientation.X
+			nv.X = (core.Abs32(nv.X) - 1) * sol.Orientation.X
 		}
 	}
 
@@ -77,42 +77,42 @@ func (s *Solid) UpdateVelocity(dpad *core.Vector2d) {
 		if dpad.Y != 0 {
 			nv.Y = core.ThrotleValue(nv.Y+dpad.Y, 2)
 		} else {
-			nv.Y = (core.Abs32(nv.Y) - 1) * s.Orientation.Y
+			nv.Y = (core.Abs32(nv.Y) - 1) * sol.Orientation.Y
 		}
 	}
 
-	*s.Velocity = *nv
+	*sol.Velocity = *nv
 }
 
-func (s *Solid) PatternStep() *Movement {
+func (sol *Solid) PatternStep() *Movement {
 	var sum uint32 = 0
 
-	for _, mp := range s.MPattern {
+	for _, mp := range sol.MPattern {
 		sum += uint32(mp.Ticks)
-		if sum > s.CPattern {
+		if sum > sol.CPattern {
 			return &mp
 		}
 	}
-	s.CPattern = 0
+	sol.CPattern = 0
 
 	return nil
 }
 
-func (s *Solid) UpdatePCOrientation(ctrl *ControlState) {
+func (sol *Solid) UpdatePCOrientation(ctrl *ControlState) {
 
 	if ctrl.DPAD.X != 0 {
-		s.Orientation.X = core.ThrotleValue(ctrl.DPAD.X, 1)
+		sol.Orientation.X = core.ThrotleValue(ctrl.DPAD.X, 1)
 	} else {
 		if core.Abs32(ctrl.DPAD.Y) > 1 {
-			s.Orientation.X = 0
+			sol.Orientation.X = 0
 		}
 	}
 
 	if ctrl.DPAD.Y != 0 {
-		s.Orientation.Y = core.ThrotleValue(ctrl.DPAD.Y, 1)
+		sol.Orientation.Y = core.ThrotleValue(ctrl.DPAD.Y, 1)
 	} else {
 		if core.Abs32(ctrl.DPAD.X) > 1 {
-			s.Orientation.Y = 0
+			sol.Orientation.Y = 0
 		}
 	}
 }

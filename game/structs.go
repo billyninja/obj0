@@ -18,8 +18,6 @@ var (
 	F_UR                  = core.Vector2d{1, -1}
 )
 
-type SEvent func(source *SceneEntity, subject *SceneEntity, scene *Scene)
-
 type SEventHandlers struct {
 	OnCollDmg      float32
 	OnCollPushBack int32
@@ -39,10 +37,11 @@ type Loot struct {
 }
 
 type SceneEntity struct {
-	Char     *Char
-	Solid    *Solid
-	Handlers *SEventHandlers
-	ItemPtr  *Item
+	Char          *Char
+	Solid         *Solid
+	Handlers      *SEventHandlers
+	ItemPtr       *Item
+	ChainedAction *TimedChainAction
 }
 
 type Solid struct {
@@ -165,6 +164,13 @@ type VFXInst struct {
 	Text     *core.TextEl
 }
 
+func (s *SceneEntity) Destroy() {
+	s.Char = nil
+	s.Handlers = nil
+	s.ItemPtr = nil
+	s.Solid.Destroy()
+}
+
 func (s *Solid) Destroy() {
 	s.Position = nil
 	s.Source = nil
@@ -191,6 +197,7 @@ type Scene struct {
 	Interactive     []*SceneEntity
 	Monsters        []*SceneEntity
 	CullMap         []*SceneEntity
+	Projectiles     []*Solid
 	GUI             []*sdl.Rect
 	DBox            *DBox
 	WinWidth        int32

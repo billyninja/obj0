@@ -50,6 +50,7 @@ func render(s *game.Scene, renderer *sdl.Renderer) {
 	s.SolidsRender(renderer)
 	s.MonstersRender(renderer)
 	s.PCRender(PCptr, renderer)
+	s.ProjectilesRender(renderer)
 	s.VFXRender(renderer)
 	s.GUIRender(PC.Char, renderer)
 
@@ -64,6 +65,8 @@ func update(scn *game.Scene) {
 
 	now := time.Now().Unix()
 
+	PC.UpdateChainedAction(scn)
+
 	if PC.Char.Invinc > 0 && now > PC.Char.Invinc {
 		PC.Char.Invinc = 0
 	}
@@ -73,6 +76,18 @@ func update(scn *game.Scene) {
 	}
 
 	scn.Recenter(PC.Solid.Position)
+
+	for _, prj := range scn.Projectiles {
+		if prj.Position == nil {
+			continue
+		}
+		if prj.Ttl > 0 && prj.Ttl < now {
+			prj.Destroy()
+			continue
+		}
+		prj.PlayAnimation()
+		prj.Position = prj.ApplyMovement()
+	}
 
 	for _, se := range scn.CullMap {
 		sol := se.Solid

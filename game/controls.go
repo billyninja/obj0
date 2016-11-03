@@ -85,7 +85,7 @@ func (cs *ControlState) Update(scn *Scene, PC *SceneEntity, keydown []sdl.Keycod
 			break
 		case KEY_C:
 			if PC.Solid.Anim.PlayMode != 1 {
-				println("REIMPLEMENT!!!")
+				CastSpell(PC, nil, scn)
 			}
 			cs.ACTION_C = 0
 			break

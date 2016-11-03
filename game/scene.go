@@ -205,15 +205,16 @@ func (scn *Scene) ResolveCol(ObjA *SceneEntity, ObjB *SceneEntity) bool {
 	return halt
 }
 
-func (scn *Scene) ActProc(se *SceneEntity) {
+func (scn *Scene) ActProc(source *SceneEntity) {
+	sol := source.Solid
 	action_hit_box := core.ProjectHitBox(
-		core.Center(se.Solid.Position), se.Solid.Orientation, 32, nil, 1)
+		core.Center(sol.Position), sol.Orientation, 32, nil, 1)
 
 	for _, se := range scn.CullMap {
 		if se.Handlers != nil &&
 			se.Handlers.OnActEvent != nil &&
 			core.CheckCol(action_hit_box, se.Solid.Position) {
-			se.Handlers.OnActEvent(se, se, scn)
+			se.Handlers.OnActEvent(source, se, scn)
 			return
 		}
 	}
@@ -320,7 +321,7 @@ func (scn *Scene) PlaceDrop(item *Item, origin *sdl.Rect) {
 			},
 		},
 		Handlers: &SEventHandlers{
-			OnPickUp: Pickup,
+			OnActEvent: Pickup,
 		},
 	}
 

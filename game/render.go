@@ -90,8 +90,9 @@ func (s *Scene) MonstersRender(renderer *sdl.Renderer) {
 		if s.InScreen(scrPos) {
 
 			src := mon.Solid.Anim.Action[mon.Solid.Anim.Pose]
+			renderer.Copy(assets.Textures.Sprites.MainChar, SHADOW, scrPos)
+			scrPos.Y -= 12
 			renderer.Copy(mon.Solid.Txt, src, scrPos)
-			// TODO: MONSTERS SHADOW
 
 			s.CullMap = append(s.CullMap, mon)
 
@@ -100,7 +101,6 @@ func (s *Scene) MonstersRender(renderer *sdl.Renderer) {
 			renderer.FillRect(&sdl.Rect{scrPos.X, scrPos.Y - 8, 32, 4})
 			renderer.SetDrawColor(0, 255, 0, 255)
 			renderer.FillRect(&sdl.Rect{scrPos.X, scrPos.Y - 8, int32(32 * CalcPerc(mon.Char.CurrentHP, mon.Char.MaxHP) / 100), 4})
-
 		}
 	}
 }
@@ -202,5 +202,19 @@ func (s *Scene) PCRender(pc *SceneEntity, renderer *sdl.Renderer) {
 		renderer.Copy(assets.Textures.Sprites.MainChar, pc.Solid.Anim.Action[pc.Solid.Anim.Pose], scrPos)
 		scrPos.Y += 12
 		renderer.Copy(assets.Textures.Sprites.MainChar, SHADOW, scrPos)
+	}
+}
+
+func (scn *Scene) ProjectilesRender(renderer *sdl.Renderer) {
+	for _, prj := range scn.Projectiles {
+		if prj.Position == nil {
+			continue
+		}
+
+		scrp := scn.Cam.WorldToScreen(prj.Position)
+		if scn.InScreen(scrp) {
+			frame := prj.Anim.Action[prj.Anim.Pose]
+			renderer.Copy(prj.Txt, frame, scrp)
+		}
 	}
 }
