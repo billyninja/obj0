@@ -8,9 +8,41 @@ import (
 	"time"
 )
 
-var CL_WHITE sdl.Color = sdl.Color{255, 255, 255, 255}
+var (
+	CL_WHITE          sdl.Color = sdl.Color{255, 255, 255, 255}
+	CL_BLACK          sdl.Color = sdl.Color{0, 0, 0, 255}
+	CL_LIGHT_PURPLE   sdl.Color = sdl.Color{151, 126, 254, 255}
+	CL_AQUA_GREEN     sdl.Color = sdl.Color{131, 225, 191, 255}
+	CL_LEATHER_BROWN  sdl.Color = sdl.Color{121, 59, 22, 255}
+	CL_JUPITER_ORANGE sdl.Color = sdl.Color{255, 148, 0, 255}
+	CL_LEAD_GRAY      sdl.Color = sdl.Color{70, 70, 70, 255}
+)
+
+func (s *Scene) RenderIso(renderer *sdl.Renderer) {
+	tile_width := 64
+	tile_height := tile_width
+	source := &sdl.Rect{0, 0, int32(tile_width), int32(tile_height)}
+
+	for i := 0; i < 100; i++ {
+		for j := 100; j >= 0; j-- {
+
+			x := int32(
+				(j * tile_width / 2) + (i * tile_width / 2))
+			y := int32(
+				(i * tile_height / 2) - (j * tile_height / 2))
+
+			scrPos := s.Cam.WorldToScreen(&sdl.Rect{x, y, int32(tile_width), int32(tile_height)})
+			if s.InScreen(scrPos) {
+				renderer.Copy(assets.Textures.Tilesets.Iso, source, scrPos)
+			}
+		}
+	}
+}
 
 func (s *Scene) TerrainRender(renderer *sdl.Renderer) {
+
+	core.SetColor(renderer, &CL_BLACK)
+
 	var Source *sdl.Rect
 	var init int32 = 0
 
@@ -42,10 +74,10 @@ func (s *Scene) TerrainRender(renderer *sdl.Renderer) {
 			} else {
 				Source = gfx
 			}
-			if Source != nil && &screenPos != nil {
-			}
 
-			renderer.Copy(s.TileSet, Source, &screenPos)
+			if Source != nil && &screenPos != nil {
+				renderer.Copy(s.TileSet, Source, &screenPos)
+			}
 		}
 	}
 }
@@ -63,17 +95,17 @@ func (s *Scene) SolidsRender(renderer *sdl.Renderer) {
 
 		if s.InScreen(scrPos) {
 			var src *sdl.Rect
+
 			if obj.Anim != nil {
 				src = obj.Anim.Action[obj.Anim.Pose]
 			} else {
 				src = obj.Source
 			}
 
-			if src == nil {
-				renderer.DrawRect(scrPos)
+			if src != nil {
+				renderer.Copy(obj.Txt, src, scrPos)
 			}
 
-			renderer.Copy(obj.Txt, src, scrPos)
 			s.CullMap = append(s.CullMap, se)
 		}
 	}
@@ -172,10 +204,12 @@ func (s *Scene) GUIRender(pc *Char, renderer *sdl.Renderer) {
 	for _, spw := range s.Spawners {
 		renderer.DrawRect(s.Cam.WorldToScreen(spw.Position))
 	}
+	FW := &sdl.Rect{0, 0, 1280, 720}
+	ROOT_MENU.Render(renderer, FW)
 }
 
-func (s *Scene) VFXRender(renderer *sdl.Renderer) {
-	for _, vi := range s.Visual {
+func (s *Scene) VFXRender(Els []*VFXInst, renderer *sdl.Renderer) {
+	for _, vi := range Els {
 		if vi.Pos == nil {
 			continue
 		}
@@ -207,14 +241,19 @@ func (s *Scene) PCRender(pc *SceneEntity, renderer *sdl.Renderer) {
 
 func (scn *Scene) ProjectilesRender(renderer *sdl.Renderer) {
 	for _, prj := range scn.Projectiles {
-		if prj.Position == nil {
+		sol := prj.Solid
+		if sol == nil || sol.Position == nil {
 			continue
 		}
 
-		scrp := scn.Cam.WorldToScreen(prj.Position)
+		scrp := scn.Cam.WorldToScreen(sol.Position)
 		if scn.InScreen(scrp) {
-			frame := prj.Anim.Action[prj.Anim.Pose]
-			renderer.Copy(prj.Txt, frame, scrp)
+			frame := sol.Anim.Action[sol.Anim.Pose]
+			renderer.Copy(sol.Txt, frame, scrp)
 		}
 	}
+}
+
+func (scn *Scene) PostEffectRender(renderer *sdl.Renderer) {
+	renderer.Copy(assets.Textures.GUI.Transparency, &sdl.Rect{0, 0, 48, 48}, &sdl.Rect{0, 0, scn.WinWidth, scn.WinHeight})
 }

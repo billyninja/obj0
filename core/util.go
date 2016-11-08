@@ -72,3 +72,7 @@ func FeetRect(pos *sdl.Rect) *sdl.Rect {
 func IsMoving(vel *Vector2d) bool {
 	return (vel.X != 0 || vel.Y != 0)
 }
+
+func SetColor(renderer *sdl.Renderer, color *sdl.Color) {
+	renderer.SetDrawColor(color.R, color.G, color.B, color.A)
+}

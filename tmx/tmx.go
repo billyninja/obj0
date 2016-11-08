@@ -135,7 +135,6 @@ func (ts *TileSet) Load(renderer *sdl.Renderer) {
 			if val, ok := spMap[currentGid]; ok {
 				for i, v := range val.TerrainRefs {
 					terr.TerrainTypes[i] = ts.TerrainTypes[v]
-					println(terr.TerrainTypes[i].Name)
 					if terr.TerrainTypes[i].Name == "COLL_BLOCK" {
 						terr.ColMode = 1
 					}
@@ -149,7 +148,6 @@ func (ts *TileSet) Load(renderer *sdl.Renderer) {
 }
 
 func LoadTMXFile(mapname string, renderer *sdl.Renderer) (*TMX, [][]*Terrain) {
-
 	f, err := os.Open(mapname)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening the tmx map: %s\n", err)

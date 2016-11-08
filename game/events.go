@@ -33,9 +33,9 @@ func Pickup(picker, item *SceneEntity, scn *Scene) {
 
 func OpenDoor(actor, door *SceneEntity, scn *Scene) {
 	if door.Handlers != nil && door.Handlers.DoorTo != "" {
-		println("NOT IMPLEMENTED! too much main dependency right now.", door.Handlers.DoorTo)
+		SceneTransition(door.Handlers.DoorTo, actor, scn)
 	} else {
-		println("no DoorTo")
+		println("no DoorTo?")
 	}
 }
 
@@ -45,10 +45,10 @@ func MeleeAttack(source, tgt *SceneEntity, scn *Scene) {
 	action_hit_box := core.ProjectHitBox(
 		core.Center(sol.Position), sol.Orientation, 32, nil, 1)
 
-	scn.SpawnVFX(action_hit_box, sol.Orientation, Hit)
+	scn.SpawnVFX(action_hit_box, sol.Orientation, Hit, 1)
 
 	hitf := func(victim *SceneEntity) {
-		scn.SpawnVFX(victim.Solid.Position, victim.Solid.Orientation, Impact)
+		scn.SpawnVFX(victim.Solid.Position, victim.Solid.Orientation, Impact, 1)
 		victim.Char.DepletHP(12)
 	}
 
@@ -72,9 +72,4 @@ func CastSpell(source, tgt *SceneEntity, scn *Scene) {
 	sol := source.Solid
 	sol.SetAnimation(MAN_CS_ANIM)
 	CloneAndAssign(Fira, source, tgt)
-	/*
-		1 - StartCastAnimation
-		2 - SpawnProjectile
-		3 - ReleaseProjectile
-	*/
 }

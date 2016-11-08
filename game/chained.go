@@ -1,8 +1,6 @@
 package game
 
 import (
-	"github.com/billyninja/obj0/assets"
-	"github.com/billyninja/obj0/core"
 	"time"
 )
 
@@ -53,37 +51,3 @@ func (se *SceneEntity) UpdateChainedAction(scn *Scene) {
 		}
 	}
 }
-
-func FiraPreCast(caster, tgt *SceneEntity, scn *Scene) {
-	caster.Solid.SetAnimation(MAN_CS_ANIM)
-}
-
-func FiraProj(caster, tgt *SceneEntity, scn *Scene) {
-	println("Fira spawn projectile!")
-
-	proj := FactoryProjectile(
-		caster.Solid.Position,
-		caster.Solid.Orientation,
-		assets.Textures.Sprites.Glow,
-		LIFE_ORB_ANIM,
-		time.Second*5,
-		3,
-		&core.Vector2d{32, 32},
-	)
-
-	scn.Projectiles = append(scn.Projectiles, proj)
-}
-
-func FiraAfterCast(caster, tgt *SceneEntity, scn *Scene) {
-	caster.Solid.SetAnimation(MAN_PU_ANIM)
-}
-
-var (
-	Fira *TimedChainAction = &TimedChainAction{
-		Steps: []*ActionStep{
-			&ActionStep{FiraPreCast, time.Millisecond * 1000},
-			&ActionStep{FiraProj, time.Millisecond * 2000},
-			&ActionStep{FiraAfterCast, time.Millisecond * 200},
-		},
-	}
-)

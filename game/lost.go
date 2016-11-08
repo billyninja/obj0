@@ -118,6 +118,11 @@ func (sol *Solid) UpdatePCOrientation(ctrl *ControlState) {
 }
 
 func (sol *Solid) PushBack(d int32, o *core.Vector2d) {
+
+	if o == nil {
+		o = &core.Vector2d{sol.Orientation.X * -1, sol.Orientation.Y * -1}
+	}
+
 	sol.Position.X += int32(o.X) * d
 	sol.Position.Y += int32(o.Y) * d
 

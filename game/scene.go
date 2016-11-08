@@ -25,8 +25,9 @@ func InitScene(mapname string, renderer *sdl.Renderer, pc *SceneEntity, winWidth
 	}
 
 	scn := &Scene{
-		codename:        mapname,
+		Codename:        mapname,
 		Cam:             cam,
+		Renderer:        renderer,
 		TileSet:         tmx.Tilesets[0].Txtr,
 		World:           wld,
 		CellsX:          tmx.WidthTiles,
@@ -62,33 +63,30 @@ func (scn *Scene) SolidFromTerrain(terr *tmx.Terrain, cellX int32, cellY int32) 
 
 	pos := &sdl.Rect{cellY * scn.TileWidth, cellX * scn.TileWidth, scn.TileWidth, scn.TileWidth}
 
+	sE := &SceneEntity{
+		Solid: &Solid{
+			Position: pos,
+		},
+		Handlers: &SEventHandlers{},
+	}
+
 	for _, tt := range terr.TerrainTypes {
 
 		if tt == nil {
 			continue
 		}
 
-		var sE *SceneEntity
-
 		switch tt.Name {
 		case "COLL_BLOCK":
-			sE = &SceneEntity{
-				Solid: &Solid{
-					Position:  pos,
-					Collision: 1,
-				},
-			}
+			sE.Solid.Collision = 1
 			break
 		case "DMG":
-			sE = &SceneEntity{
-				Solid: &Solid{
-					Position:  pos,
-					Collision: 0,
-				},
-				Handlers: &SEventHandlers{
-					OnCollDmg: 12,
-				},
-			}
+			sE.Handlers.OnCollDmg = 12
+			sE.Handlers.OnCollPushBack = 12
+			break
+		case "DOOR":
+			sE.Handlers.DoorTo = "cave.tmx"
+			sE.Handlers.OnActEvent = OpenDoor
 			break
 		}
 
@@ -189,17 +187,47 @@ func (scn *Scene) Populate(population int, pc *Char) {
 func (scn *Scene) SpawnMonster(spw *SpawnPoint, pc *SceneEntity) {
 	mon, vi := spw.Produce(pc)
 	scn.Monsters = append(scn.Monsters, mon)
-	scn.Visual = append(scn.Visual, vi)
+	scn.VisualLower = append(scn.VisualLower, vi)
 }
 
-func (scn *Scene) ResolveCol(ObjA *SceneEntity, ObjB *SceneEntity) bool {
+func (scn *Scene) ResolveCol(Moving *SceneEntity, Still *SceneEntity) bool {
 	var halt bool
-	if ObjB.Solid.Collision == 1 {
+	if Still.Solid.Collision == 1 {
 		halt = true
 	}
 
-	if ObjB.Handlers != nil && ObjB.Handlers.OnCollEvent != nil {
-		ObjB.Handlers.OnCollEvent(ObjA, ObjB, scn)
+	if Moving.Handlers != nil {
+		if Still.Char != nil {
+			if Moving.Handlers.OnCollDmg > 0 {
+				Still.Char.DepletHP(Still.Handlers.OnCollDmg)
+			}
+			if Moving.Handlers.OnCollPushBack > 0 {
+				Still.Solid.PushBack(Moving.Handlers.OnCollPushBack, Moving.Solid.Orientation)
+			}
+		}
+
+		if Moving.Handlers.OnCollEvent != nil {
+			Moving.Handlers.OnCollEvent(Moving, Still, scn)
+		}
+	}
+
+	if Still != nil && Still.Handlers != nil {
+		if Moving.Char != nil {
+			if Still.Handlers.OnCollDmg > 0 {
+				Moving.Char.DepletHP(Still.Handlers.OnCollDmg)
+			}
+			if Still.Handlers.OnCollPushBack > 0 {
+				Moving.Solid.PushBack(Still.Handlers.OnCollPushBack, nil)
+			}
+		}
+
+		if Still.Handlers.OnCollEvent != nil {
+			Still.Handlers.OnCollEvent(Moving, Still, scn)
+		}
+	}
+
+	if Moving != nil && Moving.Handlers != nil && Moving.Handlers.OnCollEvent != nil {
+		Moving.Handlers.OnCollEvent(Moving, Still, scn)
 	}
 
 	return halt
@@ -302,9 +330,52 @@ func (scn *Scene) PeformPattern(se *SceneEntity) {
 	}
 }
 
-func (scn *Scene) SpawnVFX(pos *sdl.Rect, o *core.Vector2d, vfx *VFX) {
+func (scn *Scene) SpawnVFX(pos *sdl.Rect, o *core.Vector2d, vfx *VFX, layer uint8) {
 	vi := vfx.Spawn(pos, o)
-	scn.Visual = append(scn.Visual, vi)
+	if layer == 0 {
+		scn.VisualLower = append(scn.VisualLower, vi)
+	} else {
+		scn.VisualUpper = append(scn.VisualUpper, vi)
+	}
+}
+
+func (scn *Scene) UpdateVFX(now int64) {
+	upd := func(vi *VFXInst, now int64) {
+		if vi.Ttl > 0 && vi.Ttl < now {
+			vi.Destroy()
+			return
+		}
+		vi.UpdateAnim()
+	}
+	for _, vi := range scn.VisualLower {
+		upd(vi, now)
+	}
+	for _, vi := range scn.VisualUpper {
+		upd(vi, now)
+	}
+}
+
+func (scn *Scene) UpdateProjectiles(now int64) {
+	for _, prj := range scn.Projectiles {
+		sol := prj.Solid
+		if sol == nil || sol.Position == nil {
+			continue
+		}
+		if sol.Ttl > 0 && sol.Ttl < now {
+			prj.Destroy()
+			continue
+		}
+		sol.PlayAnimation()
+		sol.Position = sol.ApplyMovement()
+		if scn.EventTick == 0 {
+			for _, mon := range scn.CullMap {
+				if (mon.Solid.Collision == 1 && mon.Char != nil) && core.CheckCol(sol.Position, mon.Solid.Position) {
+					scn.ResolveCol(prj, mon)
+					break
+				}
+			}
+		}
+	}
 }
 
 func (scn *Scene) PlaceDrop(item *Item, origin *sdl.Rect) {

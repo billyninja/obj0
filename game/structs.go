@@ -40,8 +40,10 @@ type SceneEntity struct {
 	Char          *Char
 	Solid         *Solid
 	Handlers      *SEventHandlers
-	ItemPtr       *Item
 	ChainedAction *TimedChainAction
+
+	SpellPtr *Spell
+	ItemPtr  *Item
 }
 
 type Solid struct {
@@ -65,9 +67,10 @@ type Solid struct {
 }
 
 type Char struct {
-	Solid     *Solid
-	ActionMap *ActionMap
-	Inventory []*ItemStack
+	Solid        *Solid
+	ActionMap    *ActionMap
+	Inventory    []*ItemStack
+	CurrentSpell *Spell
 
 	//---
 	SpeedMod     float32
@@ -152,6 +155,11 @@ type VFX struct {
 	DefaultSpeed uint8
 }
 
+type GFX struct {
+	Txtr      *sdl.Texture
+	Animation *Animation
+}
+
 type VFXInst struct {
 	Vfx      *VFX
 	Pos      *sdl.Rect
@@ -168,7 +176,7 @@ func (s *SceneEntity) Destroy() {
 	s.Char = nil
 	s.Handlers = nil
 	s.ItemPtr = nil
-	s.Solid.Destroy()
+	s.Solid = nil
 }
 
 func (s *Solid) Destroy() {
@@ -185,19 +193,28 @@ type Camera struct {
 	DZy int32
 }
 
+type GameState struct {
+	CurrentScene *Scene
+	PC           *SceneEntity
+}
+
 type Scene struct {
-	codename   string
+	Codename   string
+	GameState  *GameState
 	StartPoint core.Vector2d
 	TileSet    *sdl.Texture
 	Cam        *Camera
+	Renderer   *sdl.Renderer
+	World      [][]*tmx.Terrain
 
-	World           [][]*tmx.Terrain
-	Visual          []*VFXInst
+	VisualUpper []*VFXInst
+	VisualLower []*VFXInst
+
 	Spawners        []*SpawnPoint
 	Interactive     []*SceneEntity
 	Monsters        []*SceneEntity
 	CullMap         []*SceneEntity
-	Projectiles     []*Solid
+	Projectiles     []*SceneEntity
 	GUI             []*sdl.Rect
 	DBox            *DBox
 	WinWidth        int32

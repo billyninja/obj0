@@ -7,8 +7,11 @@ import (
 	"github.com/billyninja/obj0/game"
 	"github.com/veandco/go-sdl2/sdl"
 	"math/rand"
+	//"os"
+	"reflect"
 	"runtime"
 	"time"
+	//"unsafe"
 )
 
 const (
@@ -20,8 +23,8 @@ var (
 	event        sdl.Event
 	game_latency time.Duration
 	Controls     *game.ControlState = &game.ControlState{}
-	currScene    *game.Scene
-	PC           = game.SceneEntity{
+
+	PC = game.SceneEntity{
 		Solid: &game.Solid{
 			Velocity:    &core.Vector2d{0, 0},
 			Orientation: &core.Vector2d{0, -1},
@@ -47,15 +50,19 @@ func render(s *game.Scene, renderer *sdl.Renderer) {
 	renderer.Clear()
 
 	s.TerrainRender(renderer)
+	s.VFXRender(s.VisualLower, renderer)
+
 	s.SolidsRender(renderer)
 	s.MonstersRender(renderer)
 	s.PCRender(PCptr, renderer)
 	s.ProjectilesRender(renderer)
-	s.VFXRender(renderer)
+
+	s.VFXRender(s.VisualUpper, renderer)
+
+	s.PostEffectRender(renderer)
 	s.GUIRender(PC.Char, renderer)
 
-	debug_info(renderer)
-	// FLUSH FRAME
+	debug_info(s, renderer)
 	renderer.Present()
 }
 
@@ -76,18 +83,7 @@ func update(scn *game.Scene) {
 	}
 
 	scn.Recenter(PC.Solid.Position)
-
-	for _, prj := range scn.Projectiles {
-		if prj.Position == nil {
-			continue
-		}
-		if prj.Ttl > 0 && prj.Ttl < now {
-			prj.Destroy()
-			continue
-		}
-		prj.PlayAnimation()
-		prj.Position = prj.ApplyMovement()
-	}
+	scn.UpdateProjectiles(now)
 
 	for _, se := range scn.CullMap {
 		sol := se.Solid
@@ -104,11 +100,8 @@ func update(scn *game.Scene) {
 			if sol.CharPtr.Drop != nil {
 				scn.PlaceDrop(sol.CharPtr.Drop, sol.Position)
 			}
-			scn.SpawnVFX(
-				&sdl.Rect{sol.Position.X, sol.Position.Y, 92, 92},
-				nil,
-				game.Puff,
-			)
+			pos := &sdl.Rect{sol.Position.X, sol.Position.Y, 92, 92}
+			scn.SpawnVFX(pos, nil, game.Puff, 1)
 			sol.Destroy()
 
 			PC.Char.CurrentXP += uint16(sol.CharPtr.MaxHP / 10)
@@ -152,6 +145,7 @@ func update(scn *game.Scene) {
 				spw.Frequency -= 1
 			}
 		}
+
 		scn.EventTick = scn.EventTickLength
 	}
 
@@ -159,19 +153,14 @@ func update(scn *game.Scene) {
 		scn.AiTick = scn.AiTickLength
 	}
 
-	for _, vi := range scn.Visual {
-		if vi.Ttl > 0 && vi.Ttl < now {
-			vi.Destroy()
-			continue
-		}
-		vi.UpdateAnim()
-	}
+	scn.UpdateVFX(now)
+
 } // end update()
 
-func debug_info(renderer *sdl.Renderer) {
+func debug_info(scn *game.Scene, renderer *sdl.Renderer) {
 	dbg_content := fmt.Sprintf(
-		"px %d py %d | Cx %.1f Cy %.1f |vx %.1f vy | %.1f (%.1f, %.1f) |"+
-			" An:%d/%d/%d cull %d i %d cX %d cY %d L %dus ETick%d AiTick%d",
+		"px %d py %d | dpx %.1f dpy %.1f |vx %.1f vy | %.1f (%.1f, %.1f) |"+
+			" An:%d/%d/%d cull %d i %d L %dus ETick%d AiTick%d",
 		PC.Solid.Position.X,
 		PC.Solid.Position.Y,
 		Controls.DPAD.X,
@@ -183,13 +172,11 @@ func debug_info(renderer *sdl.Renderer) {
 		PC.Solid.Anim.Pose,
 		PC.Solid.Anim.PoseTick,
 		PC.Solid.Anim.PlayMode,
-		len(currScene.CullMap),
-		len(currScene.Interactive),
-		currScene.Cam.P.X,
-		currScene.Cam.P.Y,
+		len(scn.CullMap),
+		len(scn.Interactive),
 		game_latency,
-		currScene.EventTick,
-		currScene.AiTick)
+		scn.EventTick,
+		scn.AiTick)
 
 	dbg_TextEl := core.TextEl{
 		Font:    assets.Fonts.Default,
@@ -200,7 +187,7 @@ func debug_info(renderer *sdl.Renderer) {
 	renderer.Copy(dbg_txtr, &sdl.Rect{0, 0, W, H}, &sdl.Rect{0, winHeight - H, W, H})
 }
 
-func catchEvents() bool {
+func catchEvents(gs *game.GameState) bool {
 
 	PC.Solid.PlayAnimation()
 
@@ -218,24 +205,24 @@ func catchEvents() bool {
 		}
 	}
 
-	Controls.Update(currScene, PCptr, KDs, KUs)
+	Controls.Update(gs.CurrentScene, PCptr, KDs, KUs)
 
 	PC.Solid.UpdateVelocity(&Controls.DPAD)
 	PC.Solid.UpdatePCOrientation(Controls)
 
 	if PC.Solid.Anim.PlayMode == 0 {
-		currScene.Travel(PCptr)
+		gs.CurrentScene.Travel(PCptr)
 	}
 
 	if core.IsMoving(PC.Solid.Velocity) && Controls.ACTION_MOD1 > 0 {
 		// HACK - Play animation again when running
 		PC.Solid.PlayAnimation()
 		r := (rand.Int31n(128) * PC.Solid.Position.X * PC.Solid.Position.Y)
-		if currScene.EventTick == 2 && r%3 == 0 {
+		if gs.CurrentScene.EventTick == 2 && r%3 == 0 {
 			dust := core.FeetRect(PC.Solid.Position)
 			dust.Y += int32(24 * PC.Solid.Orientation.Y)
 			dust.X += int32(24 * PC.Solid.Orientation.X)
-			currScene.SpawnVFX(dust, PC.Solid.Orientation, game.Puff)
+			gs.CurrentScene.SpawnVFX(dust, PC.Solid.Orientation, game.Puff, 0)
 		}
 
 		dpl := (PC.Char.MaxST * 0.0009)
@@ -256,7 +243,7 @@ func catchEvents() bool {
 
 func main() {
 
-	runtime.GOMAXPROCS(1)
+	runtime.GOMAXPROCS(8)
 
 	var window *sdl.Window
 	var renderer *sdl.Renderer
@@ -280,19 +267,115 @@ func main() {
 	game.BootstrapVFX()
 	game.BootstrapPC(PCptr)
 
+	gs := &game.GameState{
+		CurrentScene: game.InitScene("data/world.tmx", renderer, &PC, winWidth, winHeight, CharSize),
+	}
+
 	renderer.SetDrawColor(0, 0, 255, 255)
-	currScene = game.InitScene("data/world.tmx", renderer, &PC, winWidth, winHeight, CharSize)
+	gs.CurrentScene.GameState = gs
+
+	var mem runtime.MemStats
 
 	var running bool = true
 	for running {
 
 		then := time.Now()
-		running = catchEvents()
+		running = catchEvents(gs)
 
-		update(currScene)
-		render(currScene, renderer)
-
+		update(gs.CurrentScene)
+		render(gs.CurrentScene, renderer)
 		game_latency = (time.Since(then) / time.Microsecond)
-		sdl.Delay(33 - uint32(game_latency/1000))
+
+		runtime.ReadMemStats(&mem)
+		/*
+			println("---")
+			println("Alloc", mem.Alloc/1024, "k")
+			println("TotalAlloc", mem.TotalAlloc/1024, "k")
+			println("HeapAlloc", mem.HeapAlloc/1024, "k")
+			println("HeapSys", mem.HeapSys/1024, "k")
+			println("Mallocs", mem.Mallocs/1024, "k")
+			println("Frees", mem.Frees/1024)
+			println("Lookups", mem.Lookups)
+			println("NumGC", mem.NumGC)
+			println("----")
+
+			for _, st := range mem.BySize {
+				println(">", st.Size, "M.", st.Mallocs, st.Frees)
+			}
+
+			println(">>>>> Align")
+
+			println("Scene V", unsafe.Sizeof(*gs.CurrentScene))
+			println("SceneEntity V", unsafe.Sizeof(*gs.CurrentScene.CullMap[0]))
+			println("Solid V", unsafe.Sizeof(*gs.CurrentScene.CullMap[0].Solid))
+			println("Handlers V", unsafe.Sizeof(*gs.CurrentScene.Monsters[0].Handlers))
+			println("Char V", unsafe.Sizeof(*gs.CurrentScene.Monsters[0].Char))
+			println("PageSize", os.Getpagesize())
+			println("---")*/
+
+		//v := reflect.ValueOf(*gs.CurrentScene)
+		//analyse(v, nil)
+
+		println("----")
+
+		sdl.Delay(23)
 	}
+}
+
+func analyse(v reflect.Value, parentType reflect.Type) {
+	kind := v.Type().Kind().String()
+	if kind != "struct" {
+		return
+	}
+
+	println("Type=======================")
+	println(v.Type().String(), v.Type().Size())
+	println("Fields=======================")
+	for i := 0; i < v.NumField(); i++ {
+		fi := v.Type().Field(i)
+		kind := fi.Type.Kind().String()
+		out := fmt.Sprintf(
+			"%s -> %s %s (%d)",
+			kind,
+			fi.Name,
+			fi.Type.String(),
+			fi.Type.Size(),
+		)
+		println(out)
+		switch kind {
+		case "struct":
+			{
+				analyse(v.Field(i), v.Type())
+				break
+			}
+		case "ptr":
+			{
+				if v.Field(i).Elem().IsValid() && v.Field(i).Elem().Type() != parentType {
+					analyse(v.Field(i).Elem(), v.Type())
+				}
+				break
+			}
+		case "slice":
+			{
+				//kind := v.Field(i)[0].Type.Kind().String()
+				l := v.Field(i).Len()
+				println("LENGTH:", l)
+				if l > 0 {
+					v0 := reflect.ValueOf(v.Field(i).Index(0))
+					sK := v0.Type().Kind().String()
+					switch sK {
+
+					case "struct":
+						{
+							analyse(v.Field(i).Index(0), v.Type())
+						}
+						break
+					}
+				}
+				break
+			}
+		}
+	}
+	println("=======================")
+	return
 }

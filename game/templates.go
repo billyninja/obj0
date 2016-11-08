@@ -79,6 +79,7 @@ var (
 
 	LAVA_ANIM     = &Animation{Action: LAVA_A, PoseTick: 8}
 	LIFE_ORB_ANIM = &Animation{Action: YGLOW_A, PoseTick: 8}
+	PUFF_ANIM     = &Animation{Action: PUFF_A, PoseTick: 8}
 	MAN_PB_ANIM   = &Animation{Action: MAN_PUSH_BACK, PoseTick: 18, PlayMode: 1}
 	MAN_CS_ANIM   = &Animation{Action: MAN_CAST, PoseTick: 18, PlayMode: 1}
 	MAN_PU_ANIM   = &Animation{Action: MAN_PICK_UP, PoseTick: 18, PlayMode: 1}
@@ -115,6 +116,14 @@ var (
 	Impact *VFX = &VFX{
 		Strip:        HIT_B,
 		DefaultSpeed: 3,
+	}
+
+	// GFX
+	FiraProjGFX *GFX = &GFX{
+		Animation: LIFE_ORB_ANIM,
+	}
+	FiraExplGFX *GFX = &GFX{
+		Animation: PUFF_ANIM,
 	}
 
 	// Monsters
@@ -210,9 +219,6 @@ func (tpl *MonsterTemplate) MonsterFactory(lvlMod uint8, pos core.Vector2d, targ
 	return &SceneEntity{
 		Solid: sol,
 		Char:  mon,
-		Handlers: &SEventHandlers{
-			OnCollDmg: 12,
-		},
 	}
 }
 
@@ -228,6 +234,9 @@ func BootstrapVFX() {
 	Puff.Txtr = assets.Textures.Sprites.Puff
 	Hit.Txtr = assets.Textures.Sprites.Hit
 	Impact.Txtr = assets.Textures.Sprites.Hit
+
+	FiraProjGFX.Txtr = assets.Textures.Sprites.Glow
+	FiraExplGFX.Txtr = assets.Textures.Sprites.Puff
 }
 
 func BootstrapMonsters() {
