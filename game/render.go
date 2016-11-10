@@ -18,30 +18,9 @@ var (
 	CL_LEAD_GRAY      sdl.Color = sdl.Color{70, 70, 70, 255}
 )
 
-func (s *Scene) RenderIso(renderer *sdl.Renderer) {
-	tile_width := 64
-	tile_height := tile_width
-	source := &sdl.Rect{0, 0, int32(tile_width), int32(tile_height)}
-
-	for i := 0; i < 100; i++ {
-		for j := 100; j >= 0; j-- {
-
-			x := int32(
-				(j * tile_width / 2) + (i * tile_width / 2))
-			y := int32(
-				(i * tile_height / 2) - (j * tile_height / 2))
-
-			scrPos := s.Cam.WorldToScreen(&sdl.Rect{x, y, int32(tile_width), int32(tile_height)})
-			if s.InScreen(scrPos) {
-				renderer.Copy(assets.Textures.Tilesets.Iso, source, scrPos)
-			}
-		}
-	}
-}
-
 func (s *Scene) TerrainRender(renderer *sdl.Renderer) {
 
-	core.SetColor(renderer, &CL_BLACK)
+	core.SetColor(renderer, CL_BLACK)
 
 	var Source *sdl.Rect
 	var init int32 = 0
@@ -205,6 +184,7 @@ func (s *Scene) GUIRender(pc *Char, renderer *sdl.Renderer) {
 		renderer.DrawRect(s.Cam.WorldToScreen(spw.Position))
 	}
 	FW := &sdl.Rect{0, 0, 1280, 720}
+	UpdateInventoryMenu(ROOT_MENU.SubMenus[0], pc.Inventory)
 	ROOT_MENU.Render(renderer, FW)
 }
 
